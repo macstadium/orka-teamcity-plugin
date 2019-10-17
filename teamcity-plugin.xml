@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<teamcity-plugin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:schemas-jetbrains-com:teamcity-plugin-v1-xml">
+  <info>
+    <name>orka-teamcity-plugin</name>
+    <display-name>orka-teamcity-plugin</display-name>
+    <version>1.0-SNAPSHOT</version>
+    <description>This is a TeamCity plugin to support cloud agents on Orka by MacStadium</description>
+    <email>ivan@st6.io</email>
+    <vendor>
+      <name>MacStadium</name>
+      <url>https://www.macstadium.com/</url>
+      <logo>https://assets-global.website-files.com/5ac3c046c82724970fc60918/5ac3c046c82724204dc6094e_macstadium-logo-white.png</logo>
+    </vendor>
+  </info>
+  <deployment use-separate-classloader="true"/>
+</teamcity-plugin>
