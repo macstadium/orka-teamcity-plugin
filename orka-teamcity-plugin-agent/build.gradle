@@ -1,0 +1,22 @@
+plugins {
+    id "com.github.rodm.teamcity-agent" version "1.2.2"
+}
+
+teamcity {
+    version = teamcityVersion
+    agent {
+        descriptor = project.file("teamcity-plugin.xml")
+    }
+}
+
+dependencies {
+    compile project(":orka-teamcity-plugin-common")
+    provided "org.jetbrains.teamcity:agent-api:$teamcityVersion"
+    provided "org.jetbrains.teamcity:cloud-interface:$teamcityVersion"
+    provided "org.jetbrains.teamcity:cloud-shared:$teamcityVersion"
+    provided "org.jetbrains.teamcity.internal:agent:$teamcityVersion"
+    testCompile "org.jetbrains.teamcity:tests-support:$teamcityVersion"
+}
+
+agentPlugin.version = null
+agentPlugin.baseName = 'orka-macstadium'

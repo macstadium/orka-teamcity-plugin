@@ -1,0 +1,27 @@
+ext {
+    def hasVersionNumber = project.hasProperty('versionNumber') && property('versionNumber') ==~ /\d+\.\d+\.\d+.*/
+    versionNumber = hasVersionNumber ? property('versionNumber') : 'SNAPSHOT-' + new Date().format('yyyyMMddHHmmss')
+    teamcityVersion = findProperty('teamcityVersion') ?: '2018.1'
+    projectIds = ['group': 'com.macstadium.orka', 'version': versionNumber]
+}
+
+group = projectIds.group
+version = projectIds.version
+
+repositories {
+    mavenCentral()
+}
+
+allprojects {
+    group = projectIds.group
+    version = projectIds.version
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'checkstyle'
+    sourceCompatibility = JavaVersion.VERSION_1_8
+
+    test.useTestNG()
+    jar.version = null
+}

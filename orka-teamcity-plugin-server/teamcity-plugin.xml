@@ -3,7 +3,7 @@
   <info>
     <name>orka-teamcity-plugin</name>
     <display-name>orka-teamcity-plugin</display-name>
-    <version>1.0-SNAPSHOT</version>
+    <version>@Version@</version>
     <description>This is a TeamCity plugin to support cloud agents on Orka by MacStadium</description>
     <email>ivan@st6.io</email>
     <vendor>
