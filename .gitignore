@@ -3,3 +3,9 @@ target/
 .DS_STORE
 .project
 servers/
+build/
+bin/
+data/
+downloads/
+.vscode/
+.gradle

@@ -4,10 +4,15 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyObject;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import com.macstadium.orka.client.DeploymentResponse;
+import com.macstadium.orka.client.OrkaClient;
+import com.macstadium.orka.client.OrkaError;
+import com.macstadium.orka.client.VMInstance;
+import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -15,24 +20,15 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
-import javax.sound.sampled.Port;
-
-import com.macstadium.orka.client.DeploymentRequest;
-import com.macstadium.orka.client.DeploymentResponse;
-import com.macstadium.orka.client.OrkaClient;
-import com.macstadium.orka.client.OrkaError;
-import com.macstadium.orka.client.VMInstance;
-import com.macstadium.orka.client.VMResponse;
-
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-import org.testng.annotations.Test;
-
 import jetbrains.buildServer.clouds.CloudClientParameters;
 import jetbrains.buildServer.clouds.CloudImage;
 import jetbrains.buildServer.clouds.CloudImageParameters;
 import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.serverSide.AgentDescription;
+
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.testng.annotations.Test;
 
 @Test
 public class OrkaCloudClientTest {

@@ -2,7 +2,6 @@ package com.macstadium.orka;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -10,9 +9,9 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.testng.annotations.Test;
-
 import jetbrains.buildServer.serverSide.AgentDescription;
+
+import org.testng.annotations.Test;
 
 @Test
 public class OrkaCloudInstanceTest {

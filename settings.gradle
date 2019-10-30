@@ -1,0 +1,4 @@
+rootProject.name = 'orka-teamcity-plugin'
+include(':orka-teamcity-plugin-server')
+include(':orka-teamcity-plugin-agent')
+include(':orka-teamcity-plugin-common')

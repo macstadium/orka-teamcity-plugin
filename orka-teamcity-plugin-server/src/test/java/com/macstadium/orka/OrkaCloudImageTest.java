@@ -6,9 +6,9 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
-import org.testng.annotations.Test;
-
 import jetbrains.buildServer.clouds.QuotaException;
+
+import org.testng.annotations.Test;
 
 @Test
 public class OrkaCloudImageTest {
