@@ -16,7 +16,7 @@ To build the plugin, run:
 
     ./gradlew build
 
-This runs [checkstyle][checkstyle] validation and builds the plugin. The output is in `orka-teamcity-plugin-server/build/distributuons/`.
+This runs [checkstyle][checkstyle] validation and builds the plugin. The output is in `orka-teamcity-plugin-server/build/distributions/`.
 
 To run tests, run:
 
