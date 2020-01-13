@@ -15,7 +15,7 @@ public class AsyncExecutor {
     public AsyncExecutor(String threadPrefix) {
         this.threadPrefix = threadPrefix;
         int threadCount = TeamCityProperties.getInteger("teamcity.macstadium.orka.profile.async.threads", 2);
-        this.executor = ExecutorsFactory.newFixedScheduledDaemonExecutor(this.threadPrefix, threadCount);
+        this.executor = ExecutorsFactory.newFixedScheduledExecutor(this.threadPrefix, threadCount);
     }
 
     public Future<?> submit(final String taskName, final Runnable runnable) {
