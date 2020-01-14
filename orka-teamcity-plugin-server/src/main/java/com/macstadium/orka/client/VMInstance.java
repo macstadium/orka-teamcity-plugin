@@ -10,11 +10,11 @@ public class VMInstance {
     private String host;
 
     @SerializedName("ssh_port")
-    private int sshPort;
+    private String sshPort;
 
     private String image;
 
-    public VMInstance(String id, String host, int sshPort, String image) {
+    public VMInstance(String id, String host, String sshPort, String image) {
         this.id = id;
         this.host = host;
         this.sshPort = sshPort;
@@ -33,7 +33,7 @@ public class VMInstance {
         return this.image;
     }
 
-    public int getSSHPort() {
+    public String getSSHPort() {
         return this.sshPort;
     }
 
@@ -44,7 +44,7 @@ public class VMInstance {
         result = prime * result + ((host == null) ? 0 : host.hashCode());
         result = prime * result + ((id == null) ? 0 : id.hashCode());
         result = prime * result + ((image == null) ? 0 : image.hashCode());
-        result = prime * result + sshPort;
+        result = prime * result + ((sshPort == null) ? 0 : image.hashCode());;
         return result;
     }
 
@@ -81,7 +81,11 @@ public class VMInstance {
         } else if (!image.equals(other.image)) {
             return false;
         }
-        if (sshPort != other.sshPort) {
+        if (sshPort == null) {
+            if (other.sshPort != null) {
+                return false;
+            }
+        } else if (!sshPort.equals(other.sshPort)) {
             return false;
         }
         return true;
