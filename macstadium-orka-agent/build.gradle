@@ -10,7 +10,7 @@ teamcity {
 }
 
 dependencies {
-    compile project(":orka-teamcity-plugin-common")
+    compile project(":macstadium-orka-common")
     provided "org.jetbrains.teamcity:agent-api:$teamcityVersion"
     provided "org.jetbrains.teamcity:cloud-interface:$teamcityVersion"
     provided "org.jetbrains.teamcity:cloud-shared:$teamcityVersion"

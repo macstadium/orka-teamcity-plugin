@@ -13,7 +13,7 @@ The plugin allows you to configure TeamCity, so it can spin up on demand ephemer
 1. [Install](#set-up-an-orka-vm-base-image) the Orka TeamCity plugin.
 2. Set up an Orka VM [base image](#set-up-an-orka-vm-base-image). The image must have SSH enabled.
 3. Set up an Orka [VM configuration](#set-up-an-orka-vm-config-for-the-ephemeral-agents) using the base image from **Step 2**. The Orka VM config is the container template that the plugin will use to spin up ephemeral Mac machines.
-4. Set up а TeamCity [cloud profile](usage.md#configure-the-orka-teamcity-plugin).
+4. Set up а TeamCity [cloud profile](usage.md#configure-the-macstadium-orka-plugin).
 
 ## Install the Orka TeamCity Plugin
 
@@ -30,7 +30,7 @@ The Orka VM base image is used when the Orka plugin spins up ephemeral TeamCity 
 1. Set up a new Orka VM. You can set up an Orka VM using the Orka [CLI][cli] or [REST API][api]. For more information, see the Orka [quick start guide][quick-start].
 2. Connect to the Orka VM using SSH or VNC.
 3. Verify the TeamCity build agent is installed. For more information, see [here][build-agent-install].
-   **Note** Make sure to note down the installation directory for the build agent. You will need it later to configure a [TeamCity cloud profile](usage.md#configure-the-orka-teamcity-plugin).
+   **Note** Make sure to note down the installation directory for the build agent. You will need it later to configure a [TeamCity cloud profile](usage.md#configure-the-macstadium-orka-plugin).
 4. Start the agent manually, by running `<installation path>/bin/agent.sh start` on the VM.
 5. Verify the build agent is up to date. This ensures faster startup of the build agent. To do that:
    - In your TeamCity server go to `Agents` -> `Pools`.

@@ -1,4 +1,4 @@
-rootProject.name = 'orka-teamcity-plugin'
-include(':orka-teamcity-plugin-server')
-include(':orka-teamcity-plugin-agent')
-include(':orka-teamcity-plugin-common')
+rootProject.name = 'macstadium-orka'
+include(':macstadium-orka-server')
+include(':macstadium-orka-agent')
+include(':macstadium-orka-common')

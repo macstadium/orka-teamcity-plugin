@@ -19,9 +19,9 @@ teamcity {
 }
 
 dependencies {
-    agent project(path: ':orka-teamcity-plugin-agent', configuration: 'plugin')
-    server project(':orka-teamcity-plugin-common')
-    provided project(":orka-teamcity-plugin-common")
+    agent project(path: ':macstadium-orka-agent', configuration: 'plugin')
+    server project(':macstadium-orka-common')
+    provided project(":macstadium-orka-common")
 
     compile "com.squareup.okhttp3:okhttp:3.14.2"
     compile "com.google.code.gson:gson:2.8.5"
