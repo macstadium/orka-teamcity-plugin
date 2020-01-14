@@ -95,7 +95,7 @@ public class OrkaCloudClientTest {
         String instanceId = "instanceId";
 
         OrkaClient orkaClient = mock(OrkaClient.class);
-        VMInstance vmInstance = new VMInstance(instanceId, "host", 22, imageId);
+        VMInstance vmInstance = new VMInstance(instanceId, "host", "22", imageId);
         VMResponse response = new VMResponse("first", "deployed", 12, "Mojave.img", "firstImage", "default",
                 new VMInstance[] { vmInstance });
         when(orkaClient.getVM(anyString())).thenReturn(response);

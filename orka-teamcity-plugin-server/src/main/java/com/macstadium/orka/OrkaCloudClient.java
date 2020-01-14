@@ -148,12 +148,12 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                     OrkaCloudInstance cloudInstance = image.startNewInstance(instanceId);
                     cloudInstance.setStatus(InstanceStatus.RUNNING);
                     cloudInstance.setHost(instance.get().getHost());
-                    cloudInstance.setPort(instance.get().getSSHPort());
+                    cloudInstance.setPort(Integer.parseInt(instance.get().getSSHPort()));
                     return cloudInstance;
                 }
             }
 
-        } catch (IOException e) {
+        } catch (IOException | NumberFormatException e) {
             LOG.debug(String.format("createInstanceFromExistingAgent error", e));
         }
         LOG.debug("createInstanceFromExistingAgent nothing found.");
