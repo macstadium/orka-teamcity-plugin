@@ -6,7 +6,7 @@ The plugin allows you to configure TeamCity, so it can spin up on demand ephemer
 
 How to set up the plugin, see [here](setup.md).
 
-## Configure the Orka TeamCity plugin
+## Configure the MacStadium Orka plugin
 
 The plugin allows you to configure a cloud profile per project.
 
@@ -30,7 +30,7 @@ In your TeamCity server:
 
 **NOTE** `Agent Push` is not supported.
 
-## Using the Orka TeamCity plugin
+## Using the MacStadium Orka plugin
 
 Once the cloud profile is successfully configured, TeamCity will automatically spin up and destroy agents in the respective orka environment.
 
