@@ -44,6 +44,16 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
 
   self.agentDirectory = ko.observable().extend({ required: true });
 
+  self.showMappings = ko.observable(false);
+  self.initialNodeMappings = ko.observable();
+  self.nodeMappings = ko.observable();
+
+  self.initialNodeMappings.subscribe(function(data) {
+    if (data) {
+      self.nodeMappings(data.trim());
+    }
+  });
+
   self.loadInfo = function() {
     self.loadingVms(true);
 

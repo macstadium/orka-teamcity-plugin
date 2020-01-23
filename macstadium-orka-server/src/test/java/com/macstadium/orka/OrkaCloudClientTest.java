@@ -147,11 +147,45 @@ public class OrkaCloudClientTest {
         assertEquals(0, this.getImage(client).getInstances().size());
     }
 
+    public void when_private_host_is_overridden_should_connect_to_public_host() throws IOException {
+        String imageId = "imageId";
+        String privateHost = "10.10.10.4";
+        String publicHost = "100.100.100.4";
+        String nodeMappings = String.format("10.10.10.3;100.100.100.3\r%s;%s\r10.10.10.5;100.100.100.5", privateHost,
+                publicHost);
+
+        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId, nodeMappings),
+                this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getAsyncExecutorMock(),
+                mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+
+        assertEquals(publicHost, instance.getHost());
+    }
+
+    public void when_private_host_is_not_overridden_should_connect_to_private_host() throws IOException {
+        String imageId = "imageId";
+        String privateHost = "10.10.10.4";
+        String nodeMappings = "10.10.10.3;100.100.100.3\r10.10.10.5;100.100.100.5";
+
+        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId, nodeMappings),
+                this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getAsyncExecutorMock(),
+                mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+
+        assertEquals(privateHost, instance.getHost());
+    }
+
     private CloudImage getImage(OrkaCloudClient client) {
         return client.getImages().stream().findFirst().get();
     }
 
     private CloudClientParameters getCloudClientParametersMock(String imageId) {
+        return this.getCloudClientParametersMock(imageId, null);
+    }
+
+    private CloudClientParameters getCloudClientParametersMock(String imageId, String nodeMappings) {
         final Map<String, String> params = new HashMap<String, String>();
         params.put(OrkaConstants.AGENT_DIRECTORY, "dir");
         params.put(OrkaConstants.ORKA_ENDPOINT, "endpoint");
@@ -162,6 +196,7 @@ public class OrkaCloudClientTest {
         params.put(OrkaConstants.VM_PASSWORD, "vm_pass");
         params.put(CloudImageParameters.AGENT_POOL_ID_FIELD, "100");
         params.put(OrkaConstants.INSTANCE_LIMIT, "100");
+        params.put(OrkaConstants.NODE_MAPPINGS, nodeMappings);
 
         CloudClientParameters mock = mock(CloudClientParameters.class);
         when(mock.getParameter(anyString())).thenAnswer(new Answer<String>() {

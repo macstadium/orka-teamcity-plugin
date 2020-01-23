@@ -2,7 +2,6 @@ package com.macstadium.orka;
 
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
-
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.OrkaClient;
 import com.macstadium.orka.client.VMInstance;
@@ -13,9 +12,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import jetbrains.buildServer.Used;
 import jetbrains.buildServer.clouds.CloudClientEx;
@@ -46,6 +48,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     private CloudErrorInfo errorInfo;
     private final RemoteAgent remoteAgent;
     private final SSHUtil sshUtil;
+    private Map<String, String> nodeMappings;
 
     public OrkaCloudClient(@NotNull final CloudClientParameters params) {
         this.initializeOrkaClient(params);
@@ -54,6 +57,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         this.asyncExecutor = new AsyncExecutor("OrkaCloudClient");
         this.remoteAgent = new RemoteAgent();
         this.sshUtil = new SSHUtil();
+        this.nodeMappings = this.getNodeMappings(params.getParameter(OrkaConstants.NODE_MAPPINGS));
     }
 
     @Used("Tests")
@@ -65,6 +69,20 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         this.orkaClient = client;
         this.remoteAgent = remoteAgent;
         this.sshUtil = sshUtil;
+        this.nodeMappings = this.getNodeMappings(params.getParameter(OrkaConstants.NODE_MAPPINGS));
+    }
+
+    private Map<String, String> getNodeMappings(String mappingsData) {
+        if (StringUtil.isNotEmpty(mappingsData)) {
+            String[] mappings = mappingsData.split("\\r?\\n|\\r");
+            return Arrays.stream(mappings).map(m -> m.split(";"))
+                    .collect(Collectors.toMap(pair -> pair[0], pair -> pair[1]));
+        }
+        return new HashMap<String, String>();
+    }
+
+    public Map<String, String> getH() {
+        return nodeMappings;
     }
 
     private void initializeOrkaClient(CloudClientParameters params) {
@@ -147,7 +165,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                     LOG.debug(String.format("createInstanceFromExistingAgent instance found %s.", instance.get()));
                     OrkaCloudInstance cloudInstance = image.startNewInstance(instanceId);
                     cloudInstance.setStatus(InstanceStatus.RUNNING);
-                    cloudInstance.setHost(instance.get().getHost());
+                    cloudInstance.setHost(this.getRealHost(instance.get().getHost()));
                     cloudInstance.setPort(Integer.parseInt(instance.get().getSSHPort()));
                     return cloudInstance;
                 }
@@ -201,7 +219,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                 instance.setErrorInfo(new CloudErrorInfo(Arrays.toString(response.getErrors())));
             }
             String instanceId = response.getId();
-            String host = response.getHost();
+            String host = this.getRealHost(response.getHost());
             int sshPort = response.getSSHPort();
 
             LOG.debug(String.format("setUpVM instanceId: %s, host: %s, port: %s", instanceId, host, sshPort));
@@ -281,5 +299,10 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     @Nullable
     private String findInstanceId(@NotNull final AgentDescription agentDescription) {
         return agentDescription.getConfigurationParameters().get(CommonConstants.INSTANCE_ID_PARAM_NAME);
+    }
+
+    private String getRealHost(String host) {
+        return this.nodeMappings.keySet().stream().filter(k -> k.equalsIgnoreCase(host)).findFirst()
+                .map(k -> this.nodeMappings.get(k)).orElse(host);
     }
 }
