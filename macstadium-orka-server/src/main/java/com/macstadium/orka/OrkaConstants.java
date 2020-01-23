@@ -31,6 +31,8 @@ public class OrkaConstants {
     @NotNull
     public static final String INSTANCE_LIMIT = "cloud.orka.vm.limit";
     @NotNull
+    public static final String NODE_MAPPINGS = "cloud.orka.node.mappings";
+    @NotNull
     public static final int UNLIMITED_INSTANCES = -1;
 
     public String getOrkaEndpoint() {
@@ -67,5 +69,9 @@ public class OrkaConstants {
 
     public String getInstanceLimit() {
         return INSTANCE_LIMIT;
+    }
+
+    public String getNodeMappings() {
+        return NODE_MAPPINGS;
     }
 }

@@ -5,3 +5,7 @@
 .runnerFormTable {
   padding-bottom: 0;
 }
+
+.mappings.hidden {
+  display: none !important;
+}
