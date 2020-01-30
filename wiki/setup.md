@@ -10,9 +10,9 @@ The plugin allows you to configure TeamCity, so it can spin up on demand ephemer
 
 ## Setup overview
 
-1. [Install](#set-up-an-orka-vm-base-image) the Orka TeamCity plugin.
+1. [Install](#install-the-orka-teamcity-plugin) the Orka TeamCity plugin.
 2. Set up an Orka VM [base image](#set-up-an-orka-vm-base-image). The image must have SSH enabled.
-3. Set up an Orka [VM configuration](#set-up-an-orka-vm-config-for-the-ephemeral-agents) using the base image from **Step 2**. The Orka VM config is the container template that the plugin will use to spin up ephemeral Mac machines.
+3. Set up an Orka [VM configuration](#set-up-an-orka-vm-configuration-for-the-ephemeral-agents) using the base image from **Step 2**. The Orka VM config is the container template that the plugin will use to spin up ephemeral Mac machines.
 4. Set up а TeamCity [cloud profile](usage.md#configure-the-macstadium-orka-plugin).
 
 ## Install the Orka TeamCity Plugin
