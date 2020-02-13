@@ -25,3 +25,9 @@ subprojects {
     test.useTestNG()
     jar.version = null
 }
+
+
+task createGitTag(type:Exec) {
+    commandLine './create-git-tag.sh'
+    args findProperty('versionNumber')
+}
