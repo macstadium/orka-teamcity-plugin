@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+
+import javax.swing.border.StrokeBorder;
 
 import jetbrains.buildServer.clouds.CloudClientParameters;
 import jetbrains.buildServer.clouds.CloudImage;
@@ -129,6 +132,25 @@ public class OrkaCloudClientTest {
         assertEquals(host, instance.getHost());
         assertEquals(sshPort, instance.getPort());
         assertEquals(InstanceStatus.RUNNING, instance.getStatus());
+    }
+
+    public void when_start_new_instance_with_failing_vm_should_terminate_instance() throws IOException,
+            InterruptedException {
+        String imageId = "imageId";
+        String instanceId = "instanceId";
+        String host = "10.10.10.1";
+        int sshPort = 8822;
+
+        OrkaClient orkaClient = this.getOrkaClientMock(host, sshPort, instanceId);
+        SSHUtil sshUtilMock = mock(SSHUtil.class);
+        when(sshUtilMock.waitForSSH(anyString(), anyInt(), anyInt(), anyInt())).thenThrow(new IOException("Error"));
+
+        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), orkaClient,
+                this.getAsyncExecutorMock(), mock(RemoteAgent.class), sshUtilMock);
+
+        client.startNewInstance(this.getImage(client), null);
+
+        assertEquals(0, this.getImage(client).getInstances().size());
     }
 
     public void when_terminate_instance_should_return_remove_instance() throws IOException {

@@ -237,6 +237,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         } catch (IOException | InterruptedException e) {
             LOG.debug("setUpVM error", e);
             instance.setErrorInfo(new CloudErrorInfo(e.getMessage(), e.toString(), e));
+            this.terminateInstance(instance);
         }
     }
 
