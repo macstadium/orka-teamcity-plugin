@@ -8,12 +8,13 @@ import java.io.IOException;
 import java.util.List;
 
 import jetbrains.buildServer.agent.BuildAgentConfigurationEx;
+import jetbrains.buildServer.log.Loggers;
 import jetbrains.buildServer.util.FileUtil;
 
 import org.jetbrains.annotations.NotNull;
 
 public class OrkaAgent {
-    private static final Logger LOG = Logger.getInstance(OrkaAgent.class.getName());
+    private static final Logger LOG = Loggers.AGENT;
 
     public OrkaAgent(@NotNull final BuildAgentConfigurationEx configuration) throws IOException {
         super();
