@@ -30,12 +30,21 @@ public class OrkaCloudInstance implements CloudInstance {
     private volatile InstanceStatus status;
     @Nullable
     private volatile CloudErrorInfo errorInfo;
+    private boolean markedForTermination;
 
     public OrkaCloudInstance(@NotNull final OrkaCloudImage image, @NotNull final String instanceId) {
         this.image = image;
         this.status = InstanceStatus.SCHEDULED_TO_START;
         this.id = instanceId;
         this.startDate = new Date();
+    }
+
+    public boolean isMarkedForTermination() {
+        return markedForTermination;
+    }
+
+    public void setMarkedForTermination(boolean markedForTermination) {
+        this.markedForTermination = markedForTermination;
     }
 
     @NotNull

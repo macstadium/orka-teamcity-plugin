@@ -3,12 +3,14 @@ package com.macstadium.orka;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.OrkaClient;
 import com.macstadium.orka.client.OrkaError;
@@ -21,11 +23,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
-import javax.swing.border.StrokeBorder;
-
-import jetbrains.buildServer.clouds.CloudClientParameters;
 import jetbrains.buildServer.clouds.CloudImage;
-import jetbrains.buildServer.clouds.CloudImageParameters;
 import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.serverSide.AgentDescription;
 
@@ -37,8 +35,8 @@ import org.testng.annotations.Test;
 public class OrkaCloudClientTest {
     public void when_find_image_by_id_with_correct_id_should_return_image() throws IOException {
         String imageId = "imageId";
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), mock(OrkaClient.class),
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
+                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudImage image = client.findImageById(imageId);
         assertNotNull(image);
@@ -47,8 +45,8 @@ public class OrkaCloudClientTest {
     public void when_find_image_by_id_with_wrong_id_should_return_null() throws IOException {
         String imageId = "imageId";
         String anotherId = "anotherId";
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), mock(OrkaClient.class),
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
+                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudImage image = client.findImageById(anotherId);
         assertNull(image);
@@ -57,8 +55,8 @@ public class OrkaCloudClientTest {
     public void when_find_instance_by_agent_with_correct_ids_should_return_instance() throws IOException {
         String imageId = "imageId";
         String instanceId = "instanceId";
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), mock(OrkaClient.class),
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
+                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudImage image = client.findImageById(imageId);
         image.startNewInstance(instanceId);
@@ -72,8 +70,8 @@ public class OrkaCloudClientTest {
     public void when_find_instance_by_agent_with_wrong_image_id_should_return_null() throws IOException {
         String imageId = "imageId";
         String instanceId = "instanceId";
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), mock(OrkaClient.class),
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
+                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, "wrong-image-id");
 
@@ -83,8 +81,8 @@ public class OrkaCloudClientTest {
 
     public void when_find_instance_by_agent_with_no_instance_id_should_return_null() throws IOException {
         String imageId = "imageId";
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), mock(OrkaClient.class),
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
+                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         AgentDescription agentDescription = this.getAgentDescriptionMock(null, imageId);
 
@@ -103,7 +101,7 @@ public class OrkaCloudClientTest {
                 new VMInstance[] { vmInstance });
         when(orkaClient.getVM(anyString())).thenReturn(response);
 
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), orkaClient,
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
                 mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, imageId);
@@ -122,7 +120,7 @@ public class OrkaCloudClientTest {
 
         OrkaClient orkaClient = this.getOrkaClientMock(host, sshPort, instanceId);
 
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), orkaClient,
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
                 this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
@@ -134,8 +132,8 @@ public class OrkaCloudClientTest {
         assertEquals(InstanceStatus.RUNNING, instance.getStatus());
     }
 
-    public void when_start_new_instance_with_failing_vm_should_terminate_instance() throws IOException,
-            InterruptedException {
+    public void when_start_new_instance_with_failing_vm_should_terminate_instance()
+            throws IOException, InterruptedException {
         String imageId = "imageId";
         String instanceId = "instanceId";
         String host = "10.10.10.1";
@@ -145,8 +143,25 @@ public class OrkaCloudClientTest {
         SSHUtil sshUtilMock = mock(SSHUtil.class);
         when(sshUtilMock.waitForSSH(anyString(), anyInt(), anyInt(), anyInt())).thenThrow(new IOException("Error"));
 
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId), orkaClient,
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
                 this.getAsyncExecutorMock(), mock(RemoteAgent.class), sshUtilMock);
+
+        client.startNewInstance(this.getImage(client), null);
+
+        assertEquals(0, this.getImage(client).getInstances().size());
+    }
+
+    public void when_start_new_instance_with_failing_deploy_should_terminate_instance()
+            throws IOException, InterruptedException {
+        String imageId = "imageId";
+        String instanceId = "instanceId";
+        String host = "10.10.10.1";
+        int sshPort = 8822;
+
+        OrkaClient orkaClient = this.getOrkaClientMock(host, sshPort, instanceId);
+        when(orkaClient.deployVM(anyString())).thenThrow(new IOException("Error"));
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
+                this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         client.startNewInstance(this.getImage(client), null);
 
@@ -156,7 +171,7 @@ public class OrkaCloudClientTest {
     public void when_terminate_instance_should_return_remove_instance() throws IOException {
         String imageId = "imageId";
 
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId),
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
                 this.getOrkaClientMock("host", 22, "instanceId"), this.getAsyncExecutorMock(), mock(RemoteAgent.class),
                 mock(SSHUtil.class));
 
@@ -169,6 +184,41 @@ public class OrkaCloudClientTest {
         assertEquals(0, this.getImage(client).getInstances().size());
     }
 
+    public void when_terminate_instance_throws_should_mark_instance() throws IOException {
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        when(orkaClient.deleteVM(anyString())).thenThrow(new IOException("Error"));
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
+                this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+
+        assertEquals(1, this.getImage(client).getInstances().size());
+
+        client.terminateInstance(instance);
+
+        assertEquals(1, this.getImage(client).getInstances().size());
+        assertTrue("Instance marked for termination", instance.isMarkedForTermination());
+    }
+
+    public void when_terminate_instance_and_delete_vm_returns_error_should_mark_instance() throws IOException {
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        DeletionResponse deletionResponse = new DeletionResponse("Error", new OrkaError[] { new OrkaError() });
+        when(orkaClient.deleteVM(anyString())).thenReturn(deletionResponse);
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
+                this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+
+        assertEquals(1, this.getImage(client).getInstances().size());
+
+        client.terminateInstance(instance);
+
+        assertEquals(1, this.getImage(client).getInstances().size());
+        assertTrue("Instance marked for termination", instance.isMarkedForTermination());
+    }
+
     public void when_private_host_is_overridden_should_connect_to_public_host() throws IOException {
         String imageId = "imageId";
         String privateHost = "10.10.10.4";
@@ -176,7 +226,7 @@ public class OrkaCloudClientTest {
         String nodeMappings = String.format("10.10.10.3;100.100.100.3\r%s;%s\r10.10.10.5;100.100.100.5", privateHost,
                 publicHost);
 
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId, nodeMappings),
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId, nodeMappings),
                 this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getAsyncExecutorMock(),
                 mock(RemoteAgent.class), mock(SSHUtil.class));
 
@@ -190,7 +240,7 @@ public class OrkaCloudClientTest {
         String privateHost = "10.10.10.4";
         String nodeMappings = "10.10.10.3;100.100.100.3\r10.10.10.5;100.100.100.5";
 
-        OrkaCloudClient client = new OrkaCloudClient(this.getCloudClientParametersMock(imageId, nodeMappings),
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId, nodeMappings),
                 this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getAsyncExecutorMock(),
                 mock(RemoteAgent.class), mock(SSHUtil.class));
 
@@ -201,35 +251,6 @@ public class OrkaCloudClientTest {
 
     private CloudImage getImage(OrkaCloudClient client) {
         return client.getImages().stream().findFirst().get();
-    }
-
-    private CloudClientParameters getCloudClientParametersMock(String imageId) {
-        return this.getCloudClientParametersMock(imageId, null);
-    }
-
-    private CloudClientParameters getCloudClientParametersMock(String imageId, String nodeMappings) {
-        final Map<String, String> params = new HashMap<String, String>();
-        params.put(OrkaConstants.AGENT_DIRECTORY, "dir");
-        params.put(OrkaConstants.ORKA_ENDPOINT, "endpoint");
-        params.put(OrkaConstants.ORKA_USER, "user");
-        params.put(OrkaConstants.ORKA_PASSWORD, "password");
-        params.put(OrkaConstants.VM_NAME, imageId);
-        params.put(OrkaConstants.VM_USER, "vm_user");
-        params.put(OrkaConstants.VM_PASSWORD, "vm_pass");
-        params.put(CloudImageParameters.AGENT_POOL_ID_FIELD, "100");
-        params.put(OrkaConstants.INSTANCE_LIMIT, "100");
-        params.put(OrkaConstants.NODE_MAPPINGS, nodeMappings);
-
-        CloudClientParameters mock = mock(CloudClientParameters.class);
-        when(mock.getParameter(anyString())).thenAnswer(new Answer<String>() {
-            @Override
-            public String answer(InvocationOnMock invocation) throws Throwable {
-                Object[] args = invocation.getArguments();
-                return params.get(args[0]);
-            }
-        });
-
-        return mock;
     }
 
     private AgentDescription getAgentDescriptionMock(String instanceId, String imageId) {
@@ -245,8 +266,11 @@ public class OrkaCloudClientTest {
 
     private OrkaClient getOrkaClientMock(String host, int sshPort, String instanceId) throws IOException {
         OrkaClient orkaClient = mock(OrkaClient.class);
-        DeploymentResponse response = new DeploymentResponse(host, sshPort, instanceId, new OrkaError[] {}, null);
-        when(orkaClient.deployVM(anyString())).thenReturn(response);
+        DeploymentResponse deploymentResponse = new DeploymentResponse(host, sshPort, instanceId, new OrkaError[] {},
+                null);
+        when(orkaClient.deployVM(anyString())).thenReturn(deploymentResponse);
+        DeletionResponse deletionResponse = new DeletionResponse("Success", new OrkaError[] {});
+        when(orkaClient.deleteVM(anyString())).thenReturn(deletionResponse);
         return orkaClient;
     }
 

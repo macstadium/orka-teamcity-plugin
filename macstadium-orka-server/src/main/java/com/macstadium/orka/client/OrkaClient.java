@@ -17,12 +17,13 @@ import okhttp3.Request.Builder;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class OrkaClient {
+public class OrkaClient implements AutoCloseable {
     private static final OkHttpClient client = new OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build();
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final String LOGIN_PATH = "/token";
     private static final String RESOURCE_PATH = "/resources";
+    private static final String TOKEN_PATH = "/token";
     private static final String VM_PATH = RESOURCE_PATH + "/vm";
     private static final String VM_STATUS_PATH = VM_PATH + "/status";
     private static final String NODE_PATH = RESOURCE_PATH + "/node";
@@ -166,5 +167,10 @@ public class OrkaClient {
         try (Response response = client.newCall(request).execute()) {
             return response.body().string();
         }
+    }
+
+    @Override
+    public void close() throws IOException {
+        this.delete(this.endpoint + TOKEN_PATH, "");
     }
 }

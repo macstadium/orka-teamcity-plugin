@@ -2,6 +2,7 @@ package com.macstadium.orka;
 
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
+import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.OrkaClient;
 import com.macstadium.orka.client.VMInstance;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import jetbrains.buildServer.Used;
@@ -59,6 +61,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         this.remoteAgent = new RemoteAgent();
         this.sshUtil = new SSHUtil();
         this.nodeMappings = this.getNodeMappings(params.getParameter(OrkaConstants.NODE_MAPPINGS));
+
+        this.initializeBackgroundTasks();
     }
 
     @Used("Tests")
@@ -82,10 +86,6 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         return new HashMap<String, String>();
     }
 
-    public Map<String, String> getH() {
-        return nodeMappings;
-    }
-
     private void initializeOrkaClient(CloudClientParameters params) {
         String endpoint = params.getParameter(OrkaConstants.ORKA_ENDPOINT);
         String user = params.getParameter(OrkaConstants.ORKA_USER);
@@ -99,6 +99,14 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         } catch (IOException e) {
             this.errorInfo = new CloudErrorInfo("Cannot initialize Orka client", e.toString(), e);
         }
+    }
+
+    private void initializeBackgroundTasks() {
+        RemoveFailedInstancesTask removeFailedInstancesTask = new RemoveFailedInstancesTask(this);
+        int initialDelay = 60 * 1000;
+        int delay = 5 * initialDelay;
+        this.asyncExecutor.scheduleWithFixedDelay("Remove failed instances", removeFailedInstancesTask, initialDelay,
+                delay, TimeUnit.MILLISECONDS);
     }
 
     private OrkaCloudImage createImage(CloudClientParameters params) {
@@ -156,7 +164,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         try {
             LOG.debug(String.format("createInstanceFromExistingAgent searching for vm: %s.", image.getName()));
 
-            VMResponse vmResponse = this.orkaClient.getVM(image.getName());
+            VMResponse vmResponse = this.getVM(image.getName());
             if (vmResponse != null) {
                 LOG.debug(String.format("createInstanceFromExistingAgent vm found %s.", vmResponse));
 
@@ -173,7 +181,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             }
 
         } catch (IOException | NumberFormatException e) {
-            LOG.debug(String.format("createInstanceFromExistingAgent error", e));
+            LOG.info(String.format("createInstanceFromExistingAgent error", e));
         }
         LOG.debug("createInstanceFromExistingAgent nothing found.");
         return null;
@@ -217,8 +225,10 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             DeploymentResponse response = this.deployVM(image.getName());
             if (response.hasErrors()) {
                 LOG.debug(String.format("setUpVM deployment errors: %s", Arrays.toString(response.getErrors())));
-                instance.setErrorInfo(new CloudErrorInfo(Arrays.toString(response.getErrors())));
+                image.terminateInstance(instance.getInstanceId());
+                return;
             }
+
             String instanceId = response.getId();
             String host = this.getRealHost(response.getHost());
             int sshPort = response.getSSHPort();
@@ -238,14 +248,32 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         } catch (IOException | InterruptedException e) {
             LOG.debug("setUpVM error", e);
             instance.setErrorInfo(new CloudErrorInfo(e.getMessage(), e.toString(), e));
+            this.terminateNonInitilizedInstance(instance);
+        }
+    }
+
+    private void terminateNonInitilizedInstance(@NotNull final OrkaCloudInstance instance) {
+        if (StringUtil.isEmpty(instance.getHost()) || instance.getPort() <= 0) {
+            LOG.debug(String.format("terminating not initialized instance id: %s", instance.getInstanceId()));
+
+            instance.setStatus(InstanceStatus.STOPPED);
+            OrkaCloudImage image = (OrkaCloudImage) instance.getImage();
+            image.terminateInstance(instance.getInstanceId());
+        } else {
             this.terminateInstance(instance);
         }
     }
 
     private DeploymentResponse deployVM(String vmName) throws IOException {
-        DeploymentResponse response = this.orkaClient.deployVM(vmName);
+        return this.orkaClient.deployVM(vmName);
+    }
 
-        return response;
+    DeletionResponse deleteVM(String vmId) throws IOException {
+        return this.orkaClient.deleteVM(vmId);
+    }
+
+    VMResponse getVM(String vmName) throws IOException {
+        return this.orkaClient.getVM(vmName);
     }
 
     private void waitForVM(String host, int sshPort) throws InterruptedException, IOException {
@@ -272,14 +300,24 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                         image.getUser(), image.getPassword(), this.agentDirectory);
 
                 LOG.debug("terminateInstance deleting vm");
-                this.orkaClient.deleteVM(instance.getInstanceId());
-                orkaInstance.setStatus(InstanceStatus.STOPPED);
-                image.terminateInstance(instance.getInstanceId());
+                DeletionResponse response = this.deleteVM(instance.getInstanceId());
+                if (!response.hasErrors()) {
+                    orkaInstance.setStatus(InstanceStatus.STOPPED);
+                    image.terminateInstance(instance.getInstanceId());
+                } else {
+                    this.setInstanceForDeletion(orkaInstance,
+                            new CloudErrorInfo("Error deleting VM", Arrays.toString(response.getErrors())));
+                }
             } catch (IOException e) {
                 LOG.debug("terminateInstance error", e);
-                orkaInstance.setErrorInfo(new CloudErrorInfo(e.getMessage(), e.toString(), e));
+                this.setInstanceForDeletion(orkaInstance, new CloudErrorInfo(e.getMessage(), e.toString(), e));
             }
         });
+    }
+
+    private void setInstanceForDeletion(OrkaCloudInstance instance, CloudErrorInfo errorInfo) {
+        instance.setErrorInfo(errorInfo);
+        instance.setMarkedForTermination(true);
     }
 
     public void dispose() {
@@ -289,6 +327,12 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             image.dispose();
         }
         this.images.clear();
+
+        try {
+            this.orkaClient.close();
+        } catch (IOException e) {
+            LOG.debug("Closing OrkaClient error", e);
+        }
     }
 
     @Nullable
