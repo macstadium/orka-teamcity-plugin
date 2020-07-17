@@ -247,6 +247,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             instance.setStatus(InstanceStatus.RUNNING);
         } catch (IOException | InterruptedException e) {
             LOG.debug("setUpVM error", e);
+            instance.setStatus(InstanceStatus.ERROR);
             instance.setErrorInfo(new CloudErrorInfo(e.getMessage(), e.toString(), e));
             this.terminateNonInitilizedInstance(instance);
         }
@@ -310,6 +311,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                 }
             } catch (IOException e) {
                 LOG.debug("terminateInstance error", e);
+                orkaInstance.setStatus(InstanceStatus.ERROR);
                 this.setInstanceForDeletion(orkaInstance, new CloudErrorInfo(e.getMessage(), e.toString(), e));
             }
         });

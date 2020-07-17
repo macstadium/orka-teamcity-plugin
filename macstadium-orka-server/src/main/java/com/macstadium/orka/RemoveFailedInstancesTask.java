@@ -23,7 +23,9 @@ public class RemoveFailedInstancesTask implements Runnable {
 
     @Override
     public void run() {
+        LOG.debug("Running remove failed instances...");
         this.client.getImages().forEach(image -> this.terminateFailedInstances(image));
+        LOG.debug("Failed instances task completed.");
     }
 
     private void terminateFailedInstances(CloudImage image) {
@@ -33,8 +35,12 @@ public class RemoveFailedInstancesTask implements Runnable {
 
         if (instancesToTerminate.size() > 0) {
             try {
+                LOG.debug(String.format("Failed instances found for image %s", image.getName()));
+
                 Set<String> runningInstances = this.getRunningInstances(image.getName());
                 instancesToTerminate.forEach(instance -> {
+                    LOG.debug(String.format("Removing instance with id: %s", instance.getInstanceId()));
+
                     if (runningInstances.contains(instance.getInstanceId())) {
                         this.tryDeleteVM(instance);
                     } else {
@@ -60,8 +66,8 @@ public class RemoveFailedInstancesTask implements Runnable {
             if (!response.hasErrors()) {
                 this.terminateInstance(instance);
             } else {
-                LOG.info(String.format("Failed to terminate VM: %s and message: %s", 
-                    instance.getInstanceId(), Arrays.toString(response.getErrors())));
+                LOG.info(String.format("Failed to terminate VM: %s and message: %s", instance.getInstanceId(),
+                        Arrays.toString(response.getErrors())));
             }
         } catch (IOException e) {
             LOG.info(String.format("Failed to terminate VM: %s", instance.getInstanceId()), e);
