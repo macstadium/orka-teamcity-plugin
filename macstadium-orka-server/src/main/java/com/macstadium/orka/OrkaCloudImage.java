@@ -11,12 +11,13 @@ import jetbrains.buildServer.clouds.CloudErrorInfo;
 import jetbrains.buildServer.clouds.CloudImage;
 import jetbrains.buildServer.clouds.CloudInstance;
 import jetbrains.buildServer.clouds.QuotaException;
+import jetbrains.buildServer.log.Loggers;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class OrkaCloudImage implements CloudImage {
-    private static final Logger LOG = Logger.getInstance(OrkaCloudImage.class.getName());
+    private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
     @NotNull
     private final String id;
     @NotNull
@@ -80,8 +81,6 @@ public class OrkaCloudImage implements CloudImage {
     }
 
     public synchronized boolean canStartNewInstance() {
-        LOG.warn(String.format("canStartNewInstance this.instanceLimit: %s and instances: %s", this.instanceLimit,
-                this.instances.size()));
         return this.instanceLimit == OrkaConstants.UNLIMITED_INSTANCES || this.instanceLimit > this.instances.size();
     }
 
@@ -103,6 +102,7 @@ public class OrkaCloudImage implements CloudImage {
     }
 
     public void terminateInstance(String instanceId) {
+        LOG.debug(String.format("Terminate instance with id: %s", instanceId));
         this.removeInstance(instanceId);
     }
 

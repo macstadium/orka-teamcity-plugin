@@ -30,6 +30,7 @@ import jetbrains.buildServer.clouds.CloudInstance;
 import jetbrains.buildServer.clouds.CloudInstanceUserData;
 import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.clouds.QuotaException;
+import jetbrains.buildServer.log.Loggers;
 import jetbrains.buildServer.serverSide.AgentDescription;
 import jetbrains.buildServer.serverSide.BuildServerAdapter;
 
@@ -37,7 +38,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx {
-    private static final Logger LOG = Logger.getInstance(OrkaCloudClient.class.getName());
+    private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
 
     @NotNull
     private final List<OrkaCloudImage> images = new ArrayList<OrkaCloudImage>();

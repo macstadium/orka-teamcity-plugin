@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 
 import jetbrains.buildServer.clouds.InstanceStatus;
+import jetbrains.buildServer.log.Loggers;
 import jetbrains.buildServer.util.FileUtil;
 
 import net.schmizz.sshj.SSHClient;
@@ -15,7 +16,7 @@ import net.schmizz.sshj.connection.channel.direct.Session.Command;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
 
 public class RemoteAgent {
-    private static final Logger LOG = Logger.getInstance(RemoteAgent.class.getName());
+    private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
 
     private static final String START_COMMAND_FORMAT = "%s/bin/agent.sh start";
     private static final String STOP_COMMAND_FORMAT = "%s/bin/agent.sh stop";
@@ -26,7 +27,7 @@ public class RemoteAgent {
         File tempFile = File.createTempFile(CommonConstants.METADATA_FILE_PREFIX, ".tmp");
         FileUtil.writeFileAndReportErrors(tempFile, instanceId + System.lineSeparator() + imageId);
 
-        LOG.debug("startAgentOnVM");
+        LOG.debug("startAgentOnVM stating...");
 
         try (SSHClient ssh = new SSHClient()) {
             ssh.addHostKeyVerifier(new PromiscuousVerifier());
@@ -37,10 +38,15 @@ public class RemoteAgent {
             Command command = session.exec(String.format(START_COMMAND_FORMAT, agentDirectory));
             IOUtils.readFully(command.getInputStream()).toString();
         }
+
+        LOG.debug("startAgentOnVM completed.");
     }
 
     public void stopAgent(OrkaCloudInstance orkaInstance, String imageId, String host, int sshPort, String sshUser,
             String sshPassword, String agentDirectory) {
+
+        LOG.debug("stopAgentOnVM stating...");
+
         try (SSHClient ssh = new SSHClient()) {
             ssh.addHostKeyVerifier(new PromiscuousVerifier());
             ssh.connect(host, sshPort);
@@ -52,5 +58,7 @@ public class RemoteAgent {
         } catch (IOException e) {
             LOG.debug("stopAgentOnVM error", e);
         }
+
+        LOG.debug("stopAgentOnVM completed.");
     }
 }
