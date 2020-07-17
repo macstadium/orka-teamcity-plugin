@@ -4,6 +4,7 @@ import com.intellij.openapi.diagnostic.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
 import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.log.Loggers;
@@ -28,14 +29,18 @@ public class RemoteAgent {
         File tempFile = File.createTempFile(CommonConstants.METADATA_FILE_PREFIX, ".tmp");
         FileUtil.writeFileAndReportErrors(tempFile, instanceId + System.lineSeparator() + imageId);
 
-        LOG.debug("startAgentOnVM stating...");
+        LOG.debug("startAgentOnVM starting...");
 
         try (SSHClient ssh = new SSHClient()) {
             this.initSSHClient(ssh, host, sshPort, sshUser, sshPassword);
             ssh.newSCPFileTransfer().upload(tempFile.getAbsolutePath(), "/tmp");
-            Session session = ssh.startSession();
-            Command command = session.exec(String.format(START_COMMAND_FORMAT, agentDirectory));
-            IOUtils.readFully(command.getInputStream()).toString();
+            try (Session session = ssh.startSession()) {
+                LOG.debug("Executing SSH start command...");
+
+                Command command = session.exec(String.format(START_COMMAND_FORMAT, agentDirectory));
+                command.join(SSH_TIMEOUT, TimeUnit.MILLISECONDS);
+                IOUtils.readFully(command.getInputStream()).toString();
+            }
         }
 
         LOG.debug("startAgentOnVM completed.");
@@ -44,14 +49,18 @@ public class RemoteAgent {
     public void stopAgent(OrkaCloudInstance orkaInstance, String imageId, String host, int sshPort, String sshUser,
             String sshPassword, String agentDirectory) {
 
-        LOG.debug("stopAgentOnVM stating...");
+        LOG.debug("stopAgentOnVM starting...");
 
         try (SSHClient ssh = new SSHClient()) {
             this.initSSHClient(ssh, host, sshPort, sshUser, sshPassword);
             orkaInstance.setStatus(InstanceStatus.STOPPING);
-            Session session = ssh.startSession();
-            Command command = session.exec(String.format(STOP_COMMAND_FORMAT, agentDirectory));
-            IOUtils.readFully(command.getInputStream()).toString();
+            try (Session session = ssh.startSession()) {
+                LOG.debug("Executing SSH stop command...");
+
+                Command command = session.exec(String.format(STOP_COMMAND_FORMAT, agentDirectory));
+                command.join(SSH_TIMEOUT, TimeUnit.MILLISECONDS);
+                IOUtils.readFully(command.getInputStream()).toString();
+            }
         } catch (IOException e) {
             LOG.debug("stopAgentOnVM error", e);
         }
@@ -61,10 +70,14 @@ public class RemoteAgent {
 
     private void initSSHClient(SSHClient ssh, String host, int sshPort, String sshUser, String sshPassword)
             throws IOException {
+        LOG.debug("Initializing SSH Client...");
+
         ssh.setConnectTimeout(SSH_TIMEOUT);
         ssh.setTimeout(SSH_TIMEOUT);
         ssh.addHostKeyVerifier(new PromiscuousVerifier());
         ssh.connect(host, sshPort);
         ssh.authPassword(sshUser, sshPassword);
+
+        LOG.debug("SSH Client initialized.");
     }
 }
