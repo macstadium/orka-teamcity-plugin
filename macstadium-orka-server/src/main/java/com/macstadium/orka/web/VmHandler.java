@@ -27,8 +27,7 @@ public class VmHandler implements RequestHandler {
         LOG.debug(String.format("Get VMs with endpoint: %s, and user email: %s", endpoint, user));
 
         List<VMResponse> vmResponse = Collections.emptyList();
-        try {
-            OrkaClient client = new OrkaClient(endpoint, user, password);
+        try (OrkaClient client = new OrkaClient(endpoint, user, password)) {
             vmResponse = client.getVMs();
             LOG.debug(String.format("VMs size received: %s", vmResponse.size()));
         } catch (IOException e) {

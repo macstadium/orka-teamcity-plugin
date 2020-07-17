@@ -33,6 +33,7 @@
     </module>
 
     <module name="TreeWalker">
+        <module name="SuppressWarningsHolder"/>
         <module name="OuterTypeFilename"/>
         <module name="IllegalTokenText">
             <property name="tokens" value="STRING_LITERAL, CHAR_LITERAL"/>
@@ -195,5 +196,9 @@
             <message key="name.invalidPattern" value="Method name ''{0}'' must match pattern ''{1}''."/>
         </module>
         <module name="CommentsIndentation"/>
+        <module name="SuppressWarnings">
+            <property name="id" value="checkstyle:suppresswarnings"/>
+        </module>
     </module>
+    <module name="SuppressWarningsFilter"/>
 </module>

@@ -17,6 +17,7 @@ import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
 
 public class RemoteAgent {
     private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
+    private static final int SSH_TIMEOUT = 60 * 1000;
 
     private static final String START_COMMAND_FORMAT = "%s/bin/agent.sh start";
     private static final String STOP_COMMAND_FORMAT = "%s/bin/agent.sh stop";
@@ -30,9 +31,7 @@ public class RemoteAgent {
         LOG.debug("startAgentOnVM stating...");
 
         try (SSHClient ssh = new SSHClient()) {
-            ssh.addHostKeyVerifier(new PromiscuousVerifier());
-            ssh.connect(host, sshPort);
-            ssh.authPassword(sshUser, sshPassword);
+            this.initSSHClient(ssh, host, sshPort, sshUser, sshPassword);
             ssh.newSCPFileTransfer().upload(tempFile.getAbsolutePath(), "/tmp");
             Session session = ssh.startSession();
             Command command = session.exec(String.format(START_COMMAND_FORMAT, agentDirectory));
@@ -48,9 +47,7 @@ public class RemoteAgent {
         LOG.debug("stopAgentOnVM stating...");
 
         try (SSHClient ssh = new SSHClient()) {
-            ssh.addHostKeyVerifier(new PromiscuousVerifier());
-            ssh.connect(host, sshPort);
-            ssh.authPassword(sshUser, sshPassword);
+            this.initSSHClient(ssh, host, sshPort, sshUser, sshPassword);
             orkaInstance.setStatus(InstanceStatus.STOPPING);
             Session session = ssh.startSession();
             Command command = session.exec(String.format(STOP_COMMAND_FORMAT, agentDirectory));
@@ -60,5 +57,14 @@ public class RemoteAgent {
         }
 
         LOG.debug("stopAgentOnVM completed.");
+    }
+
+    private void initSSHClient(SSHClient ssh, String host, int sshPort, String sshUser, String sshPassword)
+            throws IOException {
+        ssh.setConnectTimeout(SSH_TIMEOUT);
+        ssh.setTimeout(SSH_TIMEOUT);
+        ssh.addHostKeyVerifier(new PromiscuousVerifier());
+        ssh.connect(host, sshPort);
+        ssh.authPassword(sshUser, sshPassword);
     }
 }
