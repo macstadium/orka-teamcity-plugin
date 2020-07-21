@@ -15,6 +15,7 @@ import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.testng.annotations.Test;
 
@@ -25,7 +26,8 @@ public class RemoveFailedInstancesTaskTest {
 
     public void when_run_task_and_no_instances_to_terminate_should_keep_running_instances() throws IOException {
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"),
-                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(OrkaClient.class), mock(ScheduledExecutorService.class), 
+                mock(RemoteAgent.class), mock(SSHUtil.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance instance = image.startNewInstance("instanceId");
 
@@ -39,7 +41,7 @@ public class RemoveFailedInstancesTaskTest {
     public void when_run_task_and_one_instance_to_terminate_with_no_vm_should_terminate_instance() throws IOException {
         OrkaClient orkaClient = getOrkaClientMock(new String[] { existingRunningVMId });
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance instance = image.startNewInstance(failedRunningVMId);
         instance.setMarkedForTermination(true);
@@ -56,7 +58,7 @@ public class RemoveFailedInstancesTaskTest {
         DeletionResponse deletionResponse = new DeletionResponse("Success", null);
         when(orkaClient.deleteVM(failedRunningVMId)).thenReturn(deletionResponse);
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
         failedInstance.setMarkedForTermination(true);
@@ -76,7 +78,7 @@ public class RemoveFailedInstancesTaskTest {
         when(orkaClient.deleteVM(failedRunningVMId)).thenReturn(deletionResponse);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         final OrkaCloudInstance runningInstance = image.startNewInstance(existingRunningVMId);
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
@@ -96,7 +98,7 @@ public class RemoveFailedInstancesTaskTest {
         when(orkaClient.deleteVM(failedRunningVMId)).thenThrow(new IOException());
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
         failedInstance.setMarkedForTermination(true);
@@ -117,7 +119,7 @@ public class RemoveFailedInstancesTaskTest {
         when(orkaClient.deleteVM(failedRunningVMId)).thenReturn(deletionResponse);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
         failedInstance.setMarkedForTermination(true);

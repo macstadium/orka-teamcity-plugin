@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -35,6 +36,7 @@ import jetbrains.buildServer.clouds.QuotaException;
 import jetbrains.buildServer.log.Loggers;
 import jetbrains.buildServer.serverSide.AgentDescription;
 import jetbrains.buildServer.serverSide.BuildServerAdapter;
+import jetbrains.buildServer.serverSide.executors.ExecutorServices;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -47,17 +49,17 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
     private final String agentDirectory;
     private OrkaClient orkaClient;
-    private final AsyncExecutor asyncExecutor;
+    private final ScheduledExecutorService scheduledExecutorService;
     private CloudErrorInfo errorInfo;
     private final RemoteAgent remoteAgent;
     private final SSHUtil sshUtil;
     private Map<String, String> nodeMappings;
 
-    public OrkaCloudClient(@NotNull final CloudClientParameters params) {
+    public OrkaCloudClient(@NotNull final CloudClientParameters params, ExecutorServices executorServices) {
         this.initializeOrkaClient(params);
         this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
         this.images.add(this.createImage(params));
-        this.asyncExecutor = new AsyncExecutor("OrkaCloudClient");
+        this.scheduledExecutorService = executorServices.getNormalExecutorService();
         this.remoteAgent = new RemoteAgent();
         this.sshUtil = new SSHUtil();
         this.nodeMappings = this.getNodeMappings(params.getParameter(OrkaConstants.NODE_MAPPINGS));
@@ -66,11 +68,11 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     }
 
     @Used("Tests")
-    public OrkaCloudClient(CloudClientParameters params, OrkaClient client, AsyncExecutor executor,
-            RemoteAgent remoteAgent, SSHUtil sshUtil) {
+    public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
+            ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil) {
         this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
         this.images.add(this.createImage(params));
-        this.asyncExecutor = executor;
+        this.scheduledExecutorService = scheduledExecutorService;
         this.orkaClient = client;
         this.remoteAgent = remoteAgent;
         this.sshUtil = sshUtil;
@@ -105,8 +107,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         RemoveFailedInstancesTask removeFailedInstancesTask = new RemoveFailedInstancesTask(this);
         int initialDelay = 60 * 1000;
         int delay = 5 * initialDelay;
-        this.asyncExecutor.scheduleWithFixedDelay("Remove failed instances", removeFailedInstancesTask, initialDelay,
-                delay, TimeUnit.MILLISECONDS);
+        this.scheduledExecutorService.scheduleWithFixedDelay(removeFailedInstancesTask, initialDelay, delay,
+                TimeUnit.MILLISECONDS);
     }
 
     private OrkaCloudImage createImage(CloudClientParameters params) {
@@ -214,7 +216,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         OrkaCloudInstance instance = cloudImage.startNewInstance(instanceId);
         LOG.debug(String.format("startNewInstance with temp id: %s", instanceId));
 
-        this.asyncExecutor.submit("Boot Orka Vm", () -> this.setUpVM(cloudImage, instance));
+        this.scheduledExecutorService.submit(() -> this.setUpVM(cloudImage, instance));
 
         return instance;
     }
@@ -288,7 +290,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
     public void terminateInstance(@NotNull final CloudInstance instance) {
         OrkaCloudInstance orkaInstance = (OrkaCloudInstance) instance;
-        this.asyncExecutor.submit("Terminate Orka Vm", () -> {
+        this.scheduledExecutorService.submit(() -> {
             try {
                 LOG.debug(String.format("terminateInstance id: %s", instance.getInstanceId()));
                 OrkaCloudImage image = (OrkaCloudImage) instance.getImage();
@@ -323,15 +325,15 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     }
 
     public void dispose() {
-        this.asyncExecutor.dispose();
-
         for (final OrkaCloudImage image : this.images) {
             image.dispose();
         }
         this.images.clear();
 
         try {
-            this.orkaClient.close();
+            if (this.orkaClient != null) {
+                this.orkaClient.close();
+            }
         } catch (IOException e) {
             LOG.debug("Closing OrkaClient error", e);
         }
