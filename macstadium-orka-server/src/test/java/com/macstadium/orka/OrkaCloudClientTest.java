@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 
 import jetbrains.buildServer.clouds.CloudImage;
 import jetbrains.buildServer.clouds.InstanceStatus;
@@ -36,7 +37,8 @@ public class OrkaCloudClientTest {
     public void when_find_image_by_id_with_correct_id_should_return_image() throws IOException {
         String imageId = "imageId";
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
-                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(OrkaClient.class), mock(ScheduledExecutorService.class), mock(RemoteAgent.class),
+                mock(SSHUtil.class));
 
         OrkaCloudImage image = client.findImageById(imageId);
         assertNotNull(image);
@@ -46,7 +48,8 @@ public class OrkaCloudClientTest {
         String imageId = "imageId";
         String anotherId = "anotherId";
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
-                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(OrkaClient.class), mock(ScheduledExecutorService.class), mock(RemoteAgent.class),
+                mock(SSHUtil.class));
 
         OrkaCloudImage image = client.findImageById(anotherId);
         assertNull(image);
@@ -56,7 +59,8 @@ public class OrkaCloudClientTest {
         String imageId = "imageId";
         String instanceId = "instanceId";
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
-                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(OrkaClient.class), mock(ScheduledExecutorService.class), mock(RemoteAgent.class),
+                mock(SSHUtil.class));
 
         OrkaCloudImage image = client.findImageById(imageId);
         image.startNewInstance(instanceId);
@@ -71,7 +75,8 @@ public class OrkaCloudClientTest {
         String imageId = "imageId";
         String instanceId = "instanceId";
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
-                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(OrkaClient.class), mock(ScheduledExecutorService.class), mock(RemoteAgent.class),
+                mock(SSHUtil.class));
 
         AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, "wrong-image-id");
 
@@ -82,7 +87,8 @@ public class OrkaCloudClientTest {
     public void when_find_instance_by_agent_with_no_instance_id_should_return_null() throws IOException {
         String imageId = "imageId";
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
-                mock(OrkaClient.class), mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(OrkaClient.class), mock(ScheduledExecutorService.class), mock(RemoteAgent.class),
+                mock(SSHUtil.class));
 
         AgentDescription agentDescription = this.getAgentDescriptionMock(null, imageId);
 
@@ -102,7 +108,7 @@ public class OrkaCloudClientTest {
         when(orkaClient.getVM(anyString())).thenReturn(response);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
-                mock(AsyncExecutor.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, imageId);
 
@@ -121,7 +127,7 @@ public class OrkaCloudClientTest {
         OrkaClient orkaClient = this.getOrkaClientMock(host, sshPort, instanceId);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
-                this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
 
@@ -144,7 +150,7 @@ public class OrkaCloudClientTest {
         when(sshUtilMock.waitForSSH(anyString(), anyInt(), anyInt(), anyInt())).thenThrow(new IOException("Error"));
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
-                this.getAsyncExecutorMock(), mock(RemoteAgent.class), sshUtilMock);
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), sshUtilMock);
 
         client.startNewInstance(this.getImage(client), null);
 
@@ -161,7 +167,7 @@ public class OrkaCloudClientTest {
         OrkaClient orkaClient = this.getOrkaClientMock(host, sshPort, instanceId);
         when(orkaClient.deployVM(anyString())).thenThrow(new IOException("Error"));
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
-                this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         client.startNewInstance(this.getImage(client), null);
 
@@ -172,8 +178,8 @@ public class OrkaCloudClientTest {
         String imageId = "imageId";
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId),
-                this.getOrkaClientMock("host", 22, "instanceId"), this.getAsyncExecutorMock(), mock(RemoteAgent.class),
-                mock(SSHUtil.class));
+                this.getOrkaClientMock("host", 22, "instanceId"), this.getScheduledExecutorService(),
+                mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
 
@@ -189,7 +195,7 @@ public class OrkaCloudClientTest {
         OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
         when(orkaClient.deleteVM(anyString())).thenThrow(new IOException("Error"));
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
-                this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
 
@@ -207,7 +213,7 @@ public class OrkaCloudClientTest {
         DeletionResponse deletionResponse = new DeletionResponse("Error", new OrkaError[] { new OrkaError() });
         when(orkaClient.deleteVM(anyString())).thenReturn(deletionResponse);
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
-                this.getAsyncExecutorMock(), mock(RemoteAgent.class), mock(SSHUtil.class));
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
 
@@ -227,7 +233,7 @@ public class OrkaCloudClientTest {
                 publicHost);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId, nodeMappings),
-                this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getAsyncExecutorMock(),
+                this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getScheduledExecutorService(),
                 mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
@@ -241,7 +247,7 @@ public class OrkaCloudClientTest {
         String nodeMappings = "10.10.10.3;100.100.100.3\r10.10.10.5;100.100.100.5";
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId, nodeMappings),
-                this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getAsyncExecutorMock(),
+                this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getScheduledExecutorService(),
                 mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
@@ -274,18 +280,18 @@ public class OrkaCloudClientTest {
         return orkaClient;
     }
 
-    private AsyncExecutor getAsyncExecutorMock() {
-        AsyncExecutor asyncExecutor = mock(AsyncExecutor.class);
-        when(asyncExecutor.submit(anyString(), any())).thenAnswer(new Answer<Future<?>>() {
+    private ScheduledExecutorService getScheduledExecutorService() {
+        ScheduledExecutorService scheduledExecutorService = mock(ScheduledExecutorService.class);
+        when(scheduledExecutorService.submit(any(Runnable.class))).thenAnswer(new Answer<Future<?>>() {
             @Override
             public Future<?> answer(InvocationOnMock invocation) throws Throwable {
                 Object[] args = invocation.getArguments();
-                Runnable r = (Runnable) args[1];
+                Runnable r = (Runnable) args[0];
                 r.run();
                 return CompletableFuture.completedFuture(null);
             }
         });
 
-        return asyncExecutor;
+        return scheduledExecutorService;
     }
 }

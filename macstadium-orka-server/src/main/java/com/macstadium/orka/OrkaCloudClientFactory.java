@@ -14,6 +14,7 @@ import jetbrains.buildServer.log.Loggers;
 import jetbrains.buildServer.serverSide.AgentDescription;
 import jetbrains.buildServer.serverSide.InvalidProperty;
 import jetbrains.buildServer.serverSide.PropertiesProcessor;
+import jetbrains.buildServer.serverSide.executors.ExecutorServices;
 import jetbrains.buildServer.web.openapi.PluginDescriptor;
 
 import org.jetbrains.annotations.NotNull;
@@ -23,10 +24,12 @@ public class OrkaCloudClientFactory implements CloudClientFactory {
     private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
     @NotNull
     private final String jspPath;
+    private final ExecutorServices executorServices;
 
     public OrkaCloudClientFactory(@NotNull final CloudRegistrar cloudRegistrar,
-            @NotNull final PluginDescriptor pluginDescriptor) {
+            @NotNull final PluginDescriptor pluginDescriptor, @NotNull final ExecutorServices executorServices) {
         this.jspPath = pluginDescriptor.getPluginResourcesPath("settings.html");
+        this.executorServices = executorServices;
         cloudRegistrar.registerCloudFactory(this);
     }
 
@@ -72,6 +75,6 @@ public class OrkaCloudClientFactory implements CloudClientFactory {
     @NotNull
     public OrkaCloudClient createNewClient(@NotNull final CloudState state,
             @NotNull final CloudClientParameters params) {
-        return new OrkaCloudClient(params);
+        return new OrkaCloudClient(params, executorServices);
     }
 }
