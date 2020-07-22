@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -50,6 +51,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     private final String agentDirectory;
     private OrkaClient orkaClient;
     private final ScheduledExecutorService scheduledExecutorService;
+    private ScheduledFuture<?> removedFailedInstancesScheduledTask;
     private CloudErrorInfo errorInfo;
     private final RemoteAgent remoteAgent;
     private final SSHUtil sshUtil;
@@ -107,8 +109,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         RemoveFailedInstancesTask removeFailedInstancesTask = new RemoveFailedInstancesTask(this);
         int initialDelay = 60 * 1000;
         int delay = 5 * initialDelay;
-        this.scheduledExecutorService.scheduleWithFixedDelay(removeFailedInstancesTask, initialDelay, delay,
-                TimeUnit.MILLISECONDS);
+        this.removedFailedInstancesScheduledTask = this.scheduledExecutorService
+                .scheduleWithFixedDelay(removeFailedInstancesTask, initialDelay, delay, TimeUnit.MILLISECONDS);
     }
 
     private OrkaCloudImage createImage(CloudClientParameters params) {
@@ -325,6 +327,10 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     }
 
     public void dispose() {
+        if (this.removedFailedInstancesScheduledTask != null) {
+            this.removedFailedInstancesScheduledTask.cancel(false);
+        }
+
         for (final OrkaCloudImage image : this.images) {
             image.dispose();
         }
