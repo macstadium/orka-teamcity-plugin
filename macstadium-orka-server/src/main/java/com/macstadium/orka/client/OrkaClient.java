@@ -32,6 +32,7 @@ public class OrkaClient implements AutoCloseable {
     private static final String CREATE_PATH = "/create";
     private static final String DEPLOY_PATH = "/deploy";
     private static final String DELETE_PATH = "/delete";
+    private static final String HEALTH_PATH = "/health-check";
 
     private String endpoint;
     private String token;
@@ -171,6 +172,15 @@ public class OrkaClient implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        this.delete(this.endpoint + TOKEN_PATH, "");
+        String response = this.get(this.endpoint + HEALTH_PATH);
+        Gson gson = new Gson();
+        JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
+        String apiVersionString = jsonObject.get("api_version").toString();
+        apiVersionString.replace(".", "");
+        int apiVersion = Integer.parseInt(apiVersionString);
+
+        if (apiVersion < 210) {
+            this.delete(this.endpoint + TOKEN_PATH, "");
+        }
     }
 }
