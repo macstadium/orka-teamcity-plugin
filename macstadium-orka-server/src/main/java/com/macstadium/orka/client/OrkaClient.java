@@ -179,7 +179,7 @@ public class OrkaClient implements AutoCloseable {
         apiVersionString.replace(".", "");
         int apiVersion = Integer.parseInt(apiVersionString);
 
-        if (apiVersion < 210) {
+        if (apiVersion < 211) {
             this.delete(this.endpoint + TOKEN_PATH, "");
         }
     }
