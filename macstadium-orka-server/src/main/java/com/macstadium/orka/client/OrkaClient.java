@@ -175,9 +175,8 @@ public class OrkaClient implements AutoCloseable {
         String response = this.get(this.endpoint + HEALTH_PATH);
         Gson gson = new Gson();
         JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
-        String apiVersionString = jsonObject.get("api_version").toString();
-        apiVersionString.replace(".", "");
-        int apiVersion = Integer.parseInt(apiVersionString);
+        String apiVersionString = jsonObject.get("api_version").getAsString();
+        int apiVersion = Integer.parseInt(apiVersionString.replace(".", ""));
 
         if (apiVersion < 211) {
             this.delete(this.endpoint + TOKEN_PATH, "");
