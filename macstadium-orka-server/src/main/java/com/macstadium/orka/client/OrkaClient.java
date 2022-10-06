@@ -171,15 +171,20 @@ public class OrkaClient implements AutoCloseable {
     }
 
     @Override
-    public void close() throws IOException {
-        String response = this.get(this.endpoint + HEALTH_PATH);
-        Gson gson = new Gson();
-        JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
-        String apiVersionString = jsonObject.get("api_version").getAsString();
-        int apiVersion = Integer.parseInt(apiVersionString.replace(".", ""));
+    public void close() {
+        try {
+            String response = this.get(this.endpoint + HEALTH_PATH);
+            Gson gson = new Gson();
+            JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
+            String apiVersionString = jsonObject.get("api_version").getAsString();
+            int apiVersion = Integer.parseInt(apiVersionString.replace(".", ""));
 
-        if (apiVersion < 211) {
-            this.delete(this.endpoint + TOKEN_PATH, "");
+            if (apiVersion < 211) {
+                this.delete(this.endpoint + TOKEN_PATH, "");
+            }
+        catch (IOException e) {
+            // Catch exception and Log
+            LOGGER.error("Error while closing the client", e);
         }
     }
 }
