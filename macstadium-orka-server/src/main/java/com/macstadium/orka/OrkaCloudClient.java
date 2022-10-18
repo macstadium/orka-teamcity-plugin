@@ -336,12 +336,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         }
         this.images.clear();
 
-        try {
-            if (this.orkaClient != null) {
-                this.orkaClient.close();
-            }
-        } catch (IOException e) {
-            LOG.debug("Closing OrkaClient error", e);
+        if (this.orkaClient != null) {
+            this.orkaClient.close();
         }
     }
 
