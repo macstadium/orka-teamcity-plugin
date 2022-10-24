@@ -4,12 +4,15 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
+import com.intellij.openapi.diagnostic.Logger;
+import com.macstadium.orka.OrkaConstants;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import jetbrains.buildServer.log.Loggers;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -19,6 +22,7 @@ import okhttp3.Response;
 
 public class OrkaClient implements AutoCloseable {
     private static final OkHttpClient client = new OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build();
+    private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
     private static final String LOGIN_PATH = "/token";
@@ -32,6 +36,7 @@ public class OrkaClient implements AutoCloseable {
     private static final String CREATE_PATH = "/create";
     private static final String DEPLOY_PATH = "/deploy";
     private static final String DELETE_PATH = "/delete";
+    private static final String HEALTH_PATH = "/health-check";
 
     private String endpoint;
     private String token;
@@ -170,7 +175,20 @@ public class OrkaClient implements AutoCloseable {
     }
 
     @Override
-    public void close() throws IOException {
-        this.delete(this.endpoint + TOKEN_PATH, "");
+    public void close() {
+        try {
+            String response = this.get(this.endpoint + HEALTH_PATH);
+            Gson gson = new Gson();
+            JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
+            String apiVersionString = jsonObject.get("api_version").getAsString();
+            int apiVersion = Integer.parseInt(apiVersionString.replace(".", ""));
+
+            if (apiVersion < 211) {
+                this.delete(this.endpoint + TOKEN_PATH, "");
+            }
+        } catch (IOException e) {
+            // Catch exception and Log
+            LOG.error("Error while closing the client", e);
+        }
     }
 }
