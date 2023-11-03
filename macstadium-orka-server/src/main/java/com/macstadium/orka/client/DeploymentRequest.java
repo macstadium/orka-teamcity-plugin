@@ -3,11 +3,9 @@ package com.macstadium.orka.client;
 import com.google.gson.annotations.SerializedName;
 
 public class DeploymentRequest {
+    private String vmConfig;
 
-    @SerializedName("orka_vm_name")
-    private String vmName;
-
-    public DeploymentRequest(String vmName) {
-        this.vmName = vmName;
+    public DeploymentRequest(String vmConfig) {
+        this.vmConfig = vmConfig;
     }
 }
