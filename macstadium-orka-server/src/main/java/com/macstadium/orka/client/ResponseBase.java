@@ -1,5 +1,7 @@
 package com.macstadium.orka.client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 public class ResponseBase {
     private HttpResponse httpResponse;
 
@@ -13,7 +15,8 @@ public class ResponseBase {
         return this.httpResponse;
     }
 
-    void setHttpResponse(HttpResponse httpResponse) {
+    @VisibleForTesting
+    public void setHttpResponse(HttpResponse httpResponse) {
         this.httpResponse = httpResponse;
     }
 

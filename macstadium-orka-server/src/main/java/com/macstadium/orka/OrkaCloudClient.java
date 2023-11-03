@@ -5,7 +5,6 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.OrkaClient;
-import com.macstadium.orka.client.VMInstance;
 import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
@@ -16,7 +15,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -92,14 +90,12 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
     private void initializeOrkaClient(CloudClientParameters params) {
         String endpoint = params.getParameter(OrkaConstants.ORKA_ENDPOINT);
-        String user = params.getParameter(OrkaConstants.ORKA_USER);
-        String password = params.getParameter(OrkaConstants.ORKA_PASSWORD);
+        String token = params.getParameter(OrkaConstants.TOKEN);
 
-        LOG.debug(String.format("OrkaCloudClient with endpoint: %s, user: %s, agentDirectory: %s", endpoint, user,
-                this.agentDirectory));
-
+        LOG.debug(
+                String.format("OrkaCloudClient with endpoint: %s, agentDirectory: %s", endpoint, this.agentDirectory));
         try {
-            this.orkaClient = new OrkaClient(endpoint, user, password);
+            this.orkaClient = new OrkaClient(endpoint, token);
         } catch (IOException e) {
             this.errorInfo = new CloudErrorInfo("Cannot initialize Orka client", e.toString(), e);
         }
@@ -114,6 +110,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     }
 
     private OrkaCloudImage createImage(CloudClientParameters params) {
+        String namespace = params.getParameter(OrkaConstants.NAMESPACE);
         String vm = params.getParameter(OrkaConstants.VM_NAME);
         String vmUser = params.getParameter(OrkaConstants.VM_USER);
         String vmPassword = params.getParameter(OrkaConstants.VM_PASSWORD);
@@ -125,7 +122,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         LOG.debug(String.format("OrkaCloudClient createImage with vm: %s, user: %s, poolId: %s, instanceLimit: %s", vm,
                 vmUser, agentPoolId, instanceLimit));
 
-        return new OrkaCloudImage(vm, vmUser, vmPassword, agentPoolId, limit);
+        return new OrkaCloudImage(vm, namespace, vmUser, vmPassword, agentPoolId, limit);
     }
 
     public boolean isInitialized() {
@@ -168,20 +165,16 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         try {
             LOG.debug(String.format("createInstanceFromExistingAgent searching for vm: %s.", image.getName()));
 
-            VMResponse vmResponse = this.getVM(image.getName());
-            if (vmResponse != null) {
+            VMResponse vmResponse = this.getVM(instanceId, image.getNamespace());
+            if (vmResponse != null && vmResponse.isSuccessful()) {
                 LOG.debug(String.format("createInstanceFromExistingAgent vm found %s.", vmResponse));
 
-                Optional<VMInstance> instance = Arrays.stream(vmResponse.getInstances())
-                        .filter(i -> i.getId().equalsIgnoreCase(instanceId)).findFirst();
-                if (instance.isPresent()) {
-                    LOG.debug(String.format("createInstanceFromExistingAgent instance found %s.", instance.get()));
-                    OrkaCloudInstance cloudInstance = image.startNewInstance(instanceId);
-                    cloudInstance.setStatus(InstanceStatus.RUNNING);
-                    cloudInstance.setHost(this.getRealHost(instance.get().getHost()));
-                    cloudInstance.setPort(Integer.parseInt(instance.get().getSSHPort()));
-                    return cloudInstance;
-                }
+                LOG.debug(String.format("createInstanceFromExistingAgent instance found %s.", vmResponse));
+                OrkaCloudInstance cloudInstance = image.startNewInstance(instanceId);
+                cloudInstance.setStatus(InstanceStatus.RUNNING);
+                cloudInstance.setHost(this.getRealHost(vmResponse.getIP()));
+                cloudInstance.setPort(vmResponse.getSSH());
+                return cloudInstance;
             }
 
         } catch (IOException | NumberFormatException e) {
@@ -225,17 +218,18 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
     private void setUpVM(OrkaCloudImage image, OrkaCloudInstance instance) {
         try {
-            LOG.debug(String.format("setUpVM deploying vm: %s", image.getName()));
-            DeploymentResponse response = this.deployVM(image.getName());
-            if (response.hasErrors()) {
-                LOG.debug(String.format("setUpVM deployment errors: %s", Arrays.toString(response.getErrors())));
+            LOG.debug(
+                    String.format("setUpVM deploying vm: %s, in namespace: %s", image.getName(), image.getNamespace()));
+            DeploymentResponse response = this.deployVM(image.getName(), image.getNamespace());
+            if (!response.isSuccessful()) {
+                LOG.debug(String.format("setUpVM deployment errors: %s", response.getMessage()));
                 image.terminateInstance(instance.getInstanceId());
                 return;
             }
 
-            String instanceId = response.getId();
-            String host = this.getRealHost(response.getHost());
-            int sshPort = response.getSSHPort();
+            String instanceId = response.getName();
+            String host = this.getRealHost(response.getIP());
+            int sshPort = response.getSSH();
 
             LOG.debug(String.format("setUpVM instanceId: %s, host: %s, port: %s", instanceId, host, sshPort));
 
@@ -269,16 +263,16 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         }
     }
 
-    private DeploymentResponse deployVM(String vmName) throws IOException {
-        return this.orkaClient.deployVM(vmName);
+    private DeploymentResponse deployVM(String vmName, String namespace) throws IOException {
+        return this.orkaClient.deployVM(vmName, namespace);
     }
 
-    DeletionResponse deleteVM(String vmId) throws IOException {
-        return this.orkaClient.deleteVM(vmId);
+    DeletionResponse deleteVM(String vmId, String namespace) throws IOException {
+        return this.orkaClient.deleteVM(vmId, namespace);
     }
 
-    VMResponse getVM(String vmName) throws IOException {
-        return this.orkaClient.getVM(vmName);
+    VMResponse getVM(String vmName, String namespace) throws IOException {
+        return this.orkaClient.getVM(vmName, namespace);
     }
 
     private void waitForVM(String host, int sshPort) throws InterruptedException, IOException {
@@ -305,13 +299,13 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                         image.getUser(), image.getPassword(), this.agentDirectory);
 
                 LOG.debug("terminateInstance deleting vm");
-                DeletionResponse response = this.deleteVM(instance.getInstanceId());
-                if (!response.hasErrors()) {
+                DeletionResponse response = this.deleteVM(instance.getInstanceId(), orkaInstance.getNamespace());
+                if (response.isSuccessful()) {
                     orkaInstance.setStatus(InstanceStatus.STOPPED);
                     image.terminateInstance(instance.getInstanceId());
                 } else {
                     this.setInstanceForDeletion(orkaInstance,
-                            new CloudErrorInfo("Error deleting VM", Arrays.toString(response.getErrors())));
+                            new CloudErrorInfo("Error deleting VM", response.getMessage()));
                 }
             } catch (IOException e) {
                 LOG.debug("terminateInstance error", e);
@@ -335,10 +329,6 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             image.dispose();
         }
         this.images.clear();
-
-        if (this.orkaClient != null) {
-            this.orkaClient.close();
-        }
     }
 
     @Nullable

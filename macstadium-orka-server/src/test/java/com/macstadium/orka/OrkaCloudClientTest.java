@@ -12,9 +12,8 @@ import static org.mockito.Mockito.when;
 
 import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
+import com.macstadium.orka.client.HttpResponse;
 import com.macstadium.orka.client.OrkaClient;
-import com.macstadium.orka.client.OrkaError;
-import com.macstadium.orka.client.VMInstance;
 import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
@@ -96,22 +95,21 @@ public class OrkaCloudClientTest {
         assertNull(instance);
     }
 
+    @Test
     public void when_find_instance_by_agent_with_correct_ids_no_instance_and_existing_orka_vm_should_create_instance()
             throws IOException {
         String imageId = "imageId";
         String instanceId = "instanceId";
 
         OrkaClient orkaClient = mock(OrkaClient.class);
-        VMInstance vmInstance = new VMInstance(instanceId, "host", "22", imageId);
-        VMResponse response = new VMResponse("first", "deployed", 12, "Mojave.img", "firstImage", "default",
-                new VMInstance[] { vmInstance });
-        when(orkaClient.getVM(anyString())).thenReturn(response);
+        VMResponse vmInstance = new VMResponse(instanceId, 22, "host", null);
+        vmInstance.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.getVM(any(), any())).thenReturn(vmInstance);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
                 mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, imageId);
-
         OrkaCloudInstance instance = client.findInstanceByAgent(agentDescription);
         assertNotNull(instance);
         assertEquals(instanceId, instance.getInstanceId());
@@ -165,7 +163,7 @@ public class OrkaCloudClientTest {
         int sshPort = 8822;
 
         OrkaClient orkaClient = this.getOrkaClientMock(host, sshPort, instanceId);
-        when(orkaClient.deployVM(anyString())).thenThrow(new IOException("Error"));
+        when(orkaClient.deployVM(any(), any())).thenThrow(new IOException("Error"));
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
                 this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
@@ -193,7 +191,7 @@ public class OrkaCloudClientTest {
     public void when_terminate_instance_throws_should_mark_instance() throws IOException {
         String imageId = "imageId";
         OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
-        when(orkaClient.deleteVM(anyString())).thenThrow(new IOException("Error"));
+        when(orkaClient.deleteVM(any(), any())).thenThrow(new IOException("Error"));
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
                 this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
@@ -210,8 +208,9 @@ public class OrkaCloudClientTest {
     public void when_terminate_instance_and_delete_vm_returns_error_should_mark_instance() throws IOException {
         String imageId = "imageId";
         OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
-        DeletionResponse deletionResponse = new DeletionResponse("Error", new OrkaError[] { new OrkaError() });
-        when(orkaClient.deleteVM(anyString())).thenReturn(deletionResponse);
+        DeletionResponse deletionResponse = new DeletionResponse("Error");
+        deletionResponse.setHttpResponse(new HttpResponse("imageId", 400, false));
+        when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
                 this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
@@ -272,11 +271,13 @@ public class OrkaCloudClientTest {
 
     private OrkaClient getOrkaClientMock(String host, int sshPort, String instanceId) throws IOException {
         OrkaClient orkaClient = mock(OrkaClient.class);
-        DeploymentResponse deploymentResponse = new DeploymentResponse(host, sshPort, instanceId, new OrkaError[] {},
+        DeploymentResponse deploymentResponse = new DeploymentResponse(host, sshPort, instanceId,
                 null);
-        when(orkaClient.deployVM(anyString())).thenReturn(deploymentResponse);
-        DeletionResponse deletionResponse = new DeletionResponse("Success", new OrkaError[] {});
-        when(orkaClient.deleteVM(anyString())).thenReturn(deletionResponse);
+        deploymentResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.deployVM(any(), any())).thenReturn(deploymentResponse);
+        DeletionResponse deletionResponse = new DeletionResponse("Success");
+        deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);
         return orkaClient;
     }
 

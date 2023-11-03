@@ -24,14 +24,18 @@ public class OrkaCloudImage implements CloudImage {
     private final String user;
     @NotNull
     private final String password;
+    @NotNull
+    private final String namespace;
     private final int agentPoolId;
     private final int instanceLimit;
     @NotNull
     private final Map<String, OrkaCloudInstance> instances = new ConcurrentHashMap<String, OrkaCloudInstance>();
 
-    public OrkaCloudImage(@NotNull final String imageId, @NotNull final String user, @NotNull final String password,
+    public OrkaCloudImage(@NotNull final String imageId, @NotNull final String namespace, @NotNull final String user,
+            @NotNull final String password,
             @NotNull final String agentPoolId, int instanceLimit) {
         this.id = imageId;
+        this.namespace = namespace;
         this.user = user;
         this.password = password;
         this.agentPoolId = Integer.parseInt(agentPoolId);
@@ -56,6 +60,11 @@ public class OrkaCloudImage implements CloudImage {
     @NotNull
     public String getPassword() {
         return this.password;
+    }
+
+    @NotNull
+    public String getNamespace() {
+        return this.namespace;
     }
 
     @NotNull
@@ -98,7 +107,7 @@ public class OrkaCloudImage implements CloudImage {
     }
 
     protected OrkaCloudInstance createInstance(String instanceId) {
-        return new OrkaCloudInstance(this, instanceId);
+        return new OrkaCloudInstance(this, instanceId, this.getNamespace());
     }
 
     public void terminateInstance(String instanceId) {

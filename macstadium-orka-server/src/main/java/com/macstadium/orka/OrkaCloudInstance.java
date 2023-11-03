@@ -20,6 +20,8 @@ public class OrkaCloudInstance implements CloudInstance {
     @NotNull
     private String id;
     @NotNull
+    private String namespace;
+    @NotNull
     private final OrkaCloudImage image;
     @NotNull
     private final Date startDate;
@@ -32,8 +34,10 @@ public class OrkaCloudInstance implements CloudInstance {
     private volatile CloudErrorInfo errorInfo;
     private boolean markedForTermination;
 
-    public OrkaCloudInstance(@NotNull final OrkaCloudImage image, @NotNull final String instanceId) {
+    public OrkaCloudInstance(@NotNull final OrkaCloudImage image, @NotNull final String instanceId,
+            @NotNull final String namespace) {
         this.image = image;
+        this.namespace = namespace;
         this.status = InstanceStatus.SCHEDULED_TO_START;
         this.id = instanceId;
         this.startDate = new Date();
@@ -94,6 +98,11 @@ public class OrkaCloudInstance implements CloudInstance {
     @NotNull
     public String getHost() {
         return this.host;
+    }
+
+    @NotNull
+    public String getNamespace() {
+        return this.namespace;
     }
 
     public void setHost(String host) {

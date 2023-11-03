@@ -1,33 +1,37 @@
 function OrkaImagesViewModel(BS, $F, ko, $, config) {
   var self = this;
 
-  self.orkaPasswordInitialized;
+  self.tokenInitialized;
+  self.namespaceInitialized;
 
   self.loadingVms = ko.observable(false);
   self.loadingAgentPools = ko.observable(false);
 
   self.orkaEndpoint = ko.observable().extend({ throttle: 300, required: true });
-  self.orkaUser = ko.observable().extend({ throttle: 300, required: true });
-  self.orkaPassword = ko.observable().extend({ throttle: 300, required: true });
-  self.orkaPasswordEncrypted = ko.observable();
+  self.token = ko.observable().extend({ throttle: 300, required: true });
+  self.tokenEncrypted = ko.observable();
+  self.namespace = ko.observable().extend({ throttle: 300, required: true });
 
-  self.orkaPassword.subscribe(function(data) {
-    if (self.orkaPasswordInitialized) {
-      self.orkaPasswordEncrypted(BS.Encrypt.encryptData(data, $F("publicKey")));
-    } else {
-      self.orkaPasswordInitialized = true;
+  self.namespace.subscribe(function (data) {
+    if (!self.namespaceInitialized && !data) {
+      self.namespaceInitialized = true;
+      self.namespace("orka-default");
     }
   });
 
-  self.orkaEndpoint.subscribe(function() {
+  self.token.subscribe(function (data) {
+    if (self.tokenInitialized) {
+      self.tokenEncrypted(BS.Encrypt.encryptData(data, $F("publicKey")));
+    } else {
+      self.tokenInitialized = true;
+    }
+  });
+
+  self.orkaEndpoint.subscribe(function () {
     self.loadInfo();
   });
 
-  self.orkaUser.subscribe(function() {
-    self.loadInfo();
-  });
-
-  self.orkaPasswordEncrypted.subscribe(function(daa) {
+  self.tokenEncrypted.subscribe(function () {
     self.loadInfo();
   });
 
@@ -48,51 +52,46 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
   self.initialNodeMappings = ko.observable();
   self.nodeMappings = ko.observable();
 
-  self.initialNodeMappings.subscribe(function(data) {
+  self.initialNodeMappings.subscribe(function (data) {
     if (data) {
       self.nodeMappings(data.trim());
     }
   });
 
-  self.loadInfo = function() {
+  self.loadInfo = function () {
     self.loadingVms(true);
 
     var credentials = getCredentials();
     if (credentials) {
       var url = config.baseUrl + "?resource=vms";
       $.post(url, credentials)
-        .then(function(response) {
+        .then(function (response) {
           var $response = $(response);
 
           self.vms(getVms($response));
           self.currentVm(self.vmName());
         })
-        .always(function() {
+        .always(function () {
           self.loadingVms(false);
         });
     }
   };
 
   function getCredentials() {
-    if (
-      !self.orkaEndpoint() ||
-      !self.orkaUser() ||
-      !self.orkaPasswordEncrypted()
-    ) {
+    if (!self.orkaEndpoint() || !self.tokenEncrypted()) {
       return null;
     }
 
     return {
       orkaEndpoint: self.orkaEndpoint(),
-      orkaUser: self.orkaUser(),
-      orkaPassword: self.orkaPasswordEncrypted()
+      token: self.tokenEncrypted(),
     };
   }
 
   function getVms($response) {
     return $response
       .find("vms:eq(0) vm")
-      .map(function() {
+      .map(function () {
         return $(this).text();
       })
       .get();
@@ -105,14 +104,14 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
       "?resource=agentPools&projectId=" +
       encodeURIComponent(config.projectId);
     return $.post(url)
-      .then(function(response) {
+      .then(function (response) {
         var $response = $(response);
         var agentPools = $response
           .find("agentPools:eq(0) agentPool")
-          .map(function() {
+          .map(function () {
             return {
               id: $(this).attr("id"),
-              text: $(this).text()
+              text: $(this).text(),
             };
           })
           .get();
@@ -120,7 +119,7 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
         self.agentPools(agentPools);
         self.currentAgentPoolId(self.agentPoolId());
       })
-      .always(function() {
+      .always(function () {
         self.loadingAgentPools(false);
       });
   })();

@@ -5,9 +5,7 @@ import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import jetbrains.buildServer.clouds.CloudImage;
@@ -34,40 +32,34 @@ public class RemoveFailedInstancesTask implements Runnable {
                 .collect(Collectors.toList());
 
         if (instancesToTerminate.size() > 0) {
-            try {
-                LOG.debug(String.format("Failed instances found for image %s", image.getName()));
+            LOG.debug(String.format("Failed instances found for image %s", image.getName()));
 
-                Set<String> runningInstances = this.getRunningInstances(image.getName());
-                instancesToTerminate.forEach(instance -> {
-                    LOG.debug(String.format("Removing instance with id: %s", instance.getInstanceId()));
+            instancesToTerminate.forEach(instance -> {
+                LOG.debug(String.format("Removing instance with id: %s", instance.getInstanceId()));
+                VMResponse vmResponse;
+                try {
+                    vmResponse = this.client.getVM(instance.getInstanceId(), instance.getNamespace());
 
-                    if (runningInstances.contains(instance.getInstanceId())) {
+                    if (vmResponse.isSuccessful()) {
                         this.tryDeleteVM(instance);
                     } else {
                         this.terminateInstance(instance);
                     }
-                });
-
-            } catch (IOException e) {
-                LOG.info(String.format("Failed to execute terminate failed instances for image: %s", image.getName()),
-                        e);
-            }
+                } catch (IOException e) {
+                    LOG.info(String.format("Failed to get VM: %s", instance.getInstanceId()), e);
+                }
+            });
         }
-    }
-
-    private Set<String> getRunningInstances(String imageName) throws IOException {
-        VMResponse vmResponse = this.client.getVM(imageName);
-        return Arrays.stream(vmResponse.getInstances()).map(instance -> instance.getId()).collect(Collectors.toSet());
     }
 
     private void tryDeleteVM(OrkaCloudInstance instance) {
         try {
-            DeletionResponse response = this.client.deleteVM(instance.getInstanceId());
-            if (!response.hasErrors()) {
+            DeletionResponse response = this.client.deleteVM(instance.getInstanceId(), instance.getNamespace());
+            if (response.isSuccessful()) {
                 this.terminateInstance(instance);
             } else {
                 LOG.info(String.format("Failed to terminate VM: %s and message: %s", instance.getInstanceId(),
-                        Arrays.toString(response.getErrors())));
+                        response.getHttpResponse()));
             }
         } catch (IOException e) {
             LOG.info(String.format("Failed to terminate VM: %s", instance.getInstanceId()), e);

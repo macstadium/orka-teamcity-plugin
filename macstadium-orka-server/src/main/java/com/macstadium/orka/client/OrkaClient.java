@@ -3,6 +3,7 @@ package com.macstadium.orka.client;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.text.StringUtil;
 import com.macstadium.orka.OrkaConstants;
 
 import java.io.IOException;
@@ -18,7 +19,7 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 public class OrkaClient {
-    private static final OkHttpClient client = new OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build();
+    private static final OkHttpClient client = new OkHttpClient.Builder().readTimeout(15, TimeUnit.MINUTES).build();
     private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
@@ -46,6 +47,15 @@ public class OrkaClient {
         return response;
     }
 
+    public VMResponse getVM(String vmName, String namespace) throws IOException {
+        HttpResponse httpResponse = this
+                .get(String.format("%s/%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH, vmName));
+
+        VMResponse response = JsonHelper.fromJson(httpResponse.getBody(), VMResponse.class);
+        response.setHttpResponse(httpResponse);
+        return response;
+    }
+
     public NodeResponse getNodes(String namespace) throws IOException {
         HttpResponse httpResponse = this
                 .get(String.format("%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, NODE_PATH));
@@ -63,10 +73,7 @@ public class OrkaClient {
         return response;
     }
 
-    public DeploymentResponse deployVM(String vmConfig, String namespace, String namePrefix, String image, Integer cpu,
-            String memory, String node,
-            String scheduler,
-            String tag, Boolean tagRequired) throws IOException {
+    public DeploymentResponse deployVM(String vmConfig, String namespace) throws IOException {
         DeploymentRequest deploymentRequest = new DeploymentRequest(vmConfig);
         String deploymentRequestJson = new Gson().toJson(deploymentRequest);
 
@@ -81,7 +88,13 @@ public class OrkaClient {
     public DeletionResponse deleteVM(String vmName, String namespace) throws IOException {
         HttpResponse httpResponse = this
                 .delete(String.format("%s/%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH, vmName));
-        DeletionResponse response = JsonHelper.fromJson(httpResponse.getBody(), DeletionResponse.class);
+        DeletionResponse response;
+        String body = httpResponse.getBody();
+        if (StringUtil.isEmptyOrSpaces(body)) {
+            response = new DeletionResponse(null);
+        } else {
+            response = JsonHelper.fromJson(httpResponse.getBody(), DeletionResponse.class);
+        }
         response.setHttpResponse(httpResponse);
 
         return response;

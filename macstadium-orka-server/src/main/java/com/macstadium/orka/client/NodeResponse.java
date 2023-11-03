@@ -1,4 +1,4 @@
-package io.jenkins.plugins.orka.client;
+package com.macstadium.orka.client;
 
 import com.google.gson.annotations.SerializedName;
 
