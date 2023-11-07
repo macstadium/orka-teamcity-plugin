@@ -31,24 +31,12 @@
         </tr>
 
         <tr>
-            <th><label for="${constants.orkaUser}">Orka user email: <l:star/></label></th>
+            <th><label for="${constants.token}">Orka Token: <l:star/></label></th>
             <td>
-                <input type="text" name="prop:${constants.orkaUser}" id="${constants.orkaUser}" class="longField" value="<c:out value="${propertiesBean.properties[constants.orkaUser]}"/>" data-bind="initValue: orkaUser, textInput: orkaUser"/>
-                <span class="error option-error" data-bind="validationMessage: orkaUser"></span>
+                <props:passwordProperty name="${constants.token}" className="settings longField"/>
+                <span class="error option-error" data-bind="validationMessage: token"></span>
                 <span class="smallNote">
-                    Specify the user email<bs:help
-                    urlPrefix="https://orkadocs.macstadium.com/docs/users" file=""/> used to connect to your Orka environment.
-                </span>
-            </td>
-        </tr>
-
-        <tr>
-            <th><label for="${constants.orkaPassword}">Orka password: <l:star/></label></th>
-            <td>
-                <props:passwordProperty name="${constants.orkaPassword}" className="settings longField"/>
-                <span class="error option-error" data-bind="validationMessage: orkaPassword"></span>
-                <span class="smallNote">
-                    Specify the password for the Orka user.
+                    Service account token used to access Orka.
                 </span>
             </td>
         </tr>
@@ -56,7 +44,7 @@
     <h2 class="noBorder section-header">Orka VM Config</h2>
     <table class="runnerFormTable">
         <tr>
-            <th><label for="${constants.vmName}">VM template: <l:star/></label></th>
+            <th><label for="${constants.vmName}">VM Config: <l:star/></label></th>
             <td>
                 <select name="prop:${constants.vmName}" class="longField ignoreModified" data-bind="options: vms, value: currentVm"></select>
                 <input type="hidden" class="longField" value="<c:out value="${propertiesBean.properties[constants.vmName]}"/>" data-bind="initValue: vmName, value: currentVm"/>
@@ -64,8 +52,18 @@
                         <i class="icon-refresh icon-spin"></i>
                 </span>
                 <span class="smallNote">
-                    Specify the VM template<bs:help
-                    urlPrefix="https://orkadocs.macstadium.com/docs/vms" file=""/> used to create new Orka machines.
+                    Specify the VM config used to create new Orka machines.
+                </span>
+            </td>
+        </tr>
+
+        <tr>
+            <th><label for="${constants.namespace}">Namespace: <l:star/></label></th>
+            <td>
+                <input type="text" name="prop:${constants.namespace}" id="${constants.namespace}" class="longField" value="<c:out value="${propertiesBean.properties[constants.namespace]}"/>" data-bind="initValue: namespace, textInput: namespace"/>
+                <span class="error option-error" data-bind="validationMessage: namespace"></span>
+                <span class="smallNote">
+                    The namespace used to deploy VMs to.
                 </span>
             </td>
         </tr>
@@ -157,8 +155,8 @@
         }),
         $j.getScript("<c:url value="${resPath}images.js"/>")
     ).then(function () {
-        setBindings("secure:cloud.orka.password", "initValue: orkaPassword, textInput: orkaPassword");
-        setBindings("prop:encrypted:secure:cloud.orka.password", "initValue: orkaPasswordEncrypted, textInput: orkaPasswordEncrypted");
+        setBindings("secure:cloud.orka.token", "initValue: token, textInput: token");
+        setBindings("prop:encrypted:secure:cloud.orka.token", "initValue: tokenEncrypted, textInput: tokenEncrypted");
         setBindings("secure:cloud.orka.vm.password", "initValue: vmPassword, textInput: vmPassword");
 
         ko.validation.init({insertMessages: false});

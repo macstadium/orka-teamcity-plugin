@@ -2,7 +2,7 @@ package com.macstadium.orka.web;
 
 import com.intellij.openapi.diagnostic.Logger;
 import com.macstadium.orka.client.OrkaClient;
-import com.macstadium.orka.client.VMResponse;
+import com.macstadium.orka.client.OrkaVMConfig;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -16,19 +16,18 @@ import org.jdom.Element;
 public class VmHandler implements RequestHandler {
     private static final Logger LOG = Logger.getInstance(VmHandler.class.getName());
     private static final String ORKA_ENDPOINT = "orkaEndpoint";
-    private static final String ORKA_USER = "orkaUser";
-    private static final String ORKA_PASSWORD = "orkaPassword";
+    private static final String ORKA_TOKEN = "token";
 
     public Element handle(Map<String, String> params) {
         String endpoint = params.get(ORKA_ENDPOINT);
-        String user = params.get(ORKA_USER);
-        String password = RSACipher.decryptWebRequestData(params.get(ORKA_PASSWORD));
+        String token = RSACipher.decryptWebRequestData(params.get(ORKA_TOKEN));
 
-        LOG.debug(String.format("Get VMs with endpoint: %s, and user email: %s", endpoint, user));
+        LOG.debug(String.format("Get VMs with endpoint: %s", endpoint));
 
-        List<VMResponse> vmResponse = Collections.emptyList();
-        try (OrkaClient client = new OrkaClient(endpoint, user, password)) {
-            vmResponse = client.getVMs();
+        List<OrkaVMConfig> vmResponse = Collections.emptyList();
+        try {
+            OrkaClient client = new OrkaClient(endpoint, token);
+            vmResponse = client.getVMConfigs().getConfigs();
             LOG.debug(String.format("VMs size received: %s", vmResponse.size()));
         } catch (IOException e) {
             LOG.debug("Get VMs error", e);
@@ -37,7 +36,7 @@ public class VmHandler implements RequestHandler {
 
         Element result = new Element("vms");
         vmResponse.forEach(r -> {
-            String vmName = r.getVMName();
+            String vmName = r.getName();
             LOG.debug(String.format("VMs name: %s", vmName));
             result.addContent(new Element("vm").addContent(vmName));
         });

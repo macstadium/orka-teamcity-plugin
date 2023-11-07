@@ -1,29 +1,28 @@
 package com.macstadium.orka.client;
 
-public class VMResponse extends ResponseBase {
+public class Image {
     private String name;
 
-    private int ssh;
+    private String description;
 
-    private String ip;
+    private String type;
 
-    public VMResponse(String name, int ssh, String ip, String message) {
-        super(message);
+    public Image(String name, String description, String type) {
         this.name = name;
-        this.ssh = ssh;
-        this.ip = ip;
+        this.description = description;
+        this.type = type;
     }
 
     public String getName() {
         return this.name;
     }
 
-    public int getSSH() {
-        return this.ssh;
+    public String getDescription() {
+        return this.description;
     }
 
-    public String getIP() {
-        return this.ip;
+    public String getType() {
+        return this.type;
     }
 
     @Override
@@ -31,8 +30,8 @@ public class VMResponse extends ResponseBase {
         final int prime = 31;
         int result = 1;
         result = prime * result + ((name == null) ? 0 : name.hashCode());
-        result = prime * result + ssh;
-        result = prime * result + ((ip == null) ? 0 : ip.hashCode());
+        result = prime * result + ((description == null) ? 0 : description.hashCode());
+        result = prime * result + ((type == null) ? 0 : type.hashCode());
         return result;
     }
 
@@ -47,7 +46,7 @@ public class VMResponse extends ResponseBase {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        VMResponse other = (VMResponse) obj;
+        Image other = (Image) obj;
         if (name == null) {
             if (other.name != null) {
                 return false;
@@ -55,14 +54,18 @@ public class VMResponse extends ResponseBase {
         } else if (!name.equals(other.name)) {
             return false;
         }
-        if (ssh != other.ssh) {
-            return false;
-        }
-        if (ip == null) {
-            if (other.ip != null) {
+        if (description == null) {
+            if (other.description != null) {
                 return false;
             }
-        } else if (!ip.equals(other.ip)) {
+        } else if (!description.equals(other.description)) {
+            return false;
+        }
+        if (type == null) {
+            if (other.type != null) {
+                return false;
+            }
+        } else if (!type.equals(other.type)) {
             return false;
         }
         return true;

@@ -2,14 +2,11 @@ package com.macstadium.orka.client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.text.StringUtil;
 import com.macstadium.orka.OrkaConstants;
 
 import java.io.IOException;
-import java.lang.reflect.Type;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import jetbrains.buildServer.log.Loggers;
@@ -19,176 +16,118 @@ import okhttp3.Request;
 import okhttp3.Request.Builder;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okhttp3.ResponseBody;
 
-public class OrkaClient implements AutoCloseable {
-    private static final OkHttpClient client = new OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build();
+public class OrkaClient {
+    private static final OkHttpClient client = new OkHttpClient.Builder().readTimeout(15, TimeUnit.MINUTES).build();
     private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
 
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER = "Bearer ";
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final String LOGIN_PATH = "/token";
-    private static final String RESOURCE_PATH = "/resources";
-    private static final String TOKEN_PATH = "/token";
-    private static final String VM_PATH = RESOURCE_PATH + "/vm";
-    private static final String VM_STATUS_PATH = VM_PATH + "/status";
-    private static final String NODE_PATH = RESOURCE_PATH + "/node";
-    private static final String IMAGE_PATH = RESOURCE_PATH + "/image";
-    private static final String LIST_PATH = "/list";
-    private static final String CREATE_PATH = "/create";
-    private static final String DEPLOY_PATH = "/deploy";
-    private static final String DELETE_PATH = "/delete";
-    private static final String HEALTH_PATH = "/health-check";
+    private static final String RESOURCE_PATH = "api/v1/namespaces";
+    private static final String VM_CONFIG_PATH = RESOURCE_PATH + "/orka-default/vmconfigs";
+    private static final String VM_PATH = "vms";
+    private static final String NODE_PATH = "nodes";
+    private static final String IMAGE_PATH = RESOURCE_PATH + "/orka-default/images";
 
     private String endpoint;
     private String token;
 
-    public OrkaClient(String endpoint, String email, String password) throws IOException {
+    public OrkaClient(String endpoint, String token) throws IOException {
         this.endpoint = endpoint;
-        this.token = this.getToken(email, password);
+        this.token = token;
     }
 
-    public List<VMResponse> getVMs() throws IOException {
-        String response = this.get(this.endpoint + VM_PATH + LIST_PATH);
+    public VMConfigResponse getVMConfigs() throws IOException {
+        HttpResponse httpResponse = this.get(String.format("%s/%s", this.endpoint, VM_CONFIG_PATH));
 
-        Gson gson = new Gson();
-        JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
-        String responseJson = jsonObject.get("virtual_machine_resources").toString();
-
-        Type listType = new TypeToken<List<VMResponse>>() {
-        }.getType();
-
-        return gson.fromJson(responseJson, listType);
+        VMConfigResponse response = JsonHelper.fromJson(httpResponse.getBody(), VMConfigResponse.class);
+        response.setHttpResponse(httpResponse);
+        return response;
     }
 
-    public VMResponse getVM(String vmName) throws IOException {
-        String response = this.get(this.endpoint + VM_STATUS_PATH + "/" + vmName);
+    public VMResponse getVM(String vmName, String namespace) throws IOException {
+        HttpResponse httpResponse = this
+                .get(String.format("%s/%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH, vmName));
 
-        Gson gson = new Gson();
-        JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
-        String responseJson = jsonObject.get("virtual_machine_resources").toString();
-
-        Type listType = new TypeToken<List<VMResponse>>() {
-        }.getType();
-
-        List<VMResponse> parsedResponse = gson.fromJson(responseJson, listType);
-        return parsedResponse != null && !parsedResponse.isEmpty() ? parsedResponse.get(0) : null;
+        VMResponse response = JsonHelper.fromJson(httpResponse.getBody(), VMResponse.class);
+        response.setHttpResponse(httpResponse);
+        return response;
     }
 
-    public List<NodeResponse> getNodes() throws IOException {
-        String response = this.get(this.endpoint + NODE_PATH + LIST_PATH);
-
-        Gson gson = new Gson();
-        JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
-        String responseJson = jsonObject.get("nodes").toString();
-
-        Type listType = new TypeToken<List<NodeResponse>>() {
-        }.getType();
-
-        return gson.fromJson(responseJson, listType);
+    public NodeResponse getNodes(String namespace) throws IOException {
+        HttpResponse httpResponse = this
+                .get(String.format("%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, NODE_PATH));
+        NodeResponse response = JsonHelper.fromJson(httpResponse.getBody(), NodeResponse.class);
+        response.setHttpResponse(httpResponse);
+        return response;
     }
 
-    public List<String> getImages() throws IOException {
-        String response = this.get(this.endpoint + IMAGE_PATH + LIST_PATH);
+    public ImageResponse getImages() throws IOException {
+        HttpResponse httpResponse = this.get(String.format("%s/%s", this.endpoint, IMAGE_PATH));
 
-        Gson gson = new Gson();
-        JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
-        String responseJson = jsonObject.get("images").toString();
+        ImageResponse response = JsonHelper.fromJson(httpResponse.getBody(), ImageResponse.class);
+        response.setHttpResponse(httpResponse);
 
-        Type listType = new TypeToken<List<String>>() {
-        }.getType();
-
-        return gson.fromJson(responseJson, listType);
+        return response;
     }
 
-    public ConfigurationResponse createConfiguration(String vmName, String image, String baseImage,
-            String configTemplate, int cpuCount) throws IOException {
-        Gson gson = new Gson();
+    public DeploymentResponse deployVM(String vmConfig, String namespace) throws IOException {
+        DeploymentRequest deploymentRequest = new DeploymentRequest(vmConfig);
+        String deploymentRequestJson = new Gson().toJson(deploymentRequest);
 
-        ConfigurationRequest configRequest = new ConfigurationRequest(vmName, image, baseImage, configTemplate,
-                cpuCount);
+        HttpResponse httpResponse = this.post(
+                String.format("%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH), deploymentRequestJson);
+        DeploymentResponse response = JsonHelper.fromJson(httpResponse.getBody(), DeploymentResponse.class);
+        response.setHttpResponse(httpResponse);
 
-        String configRequestJson = gson.toJson(configRequest);
-        String response = this.post(this.endpoint + VM_PATH + CREATE_PATH, configRequestJson);
-
-        return gson.fromJson(response, ConfigurationResponse.class);
+        return response;
     }
 
-    public DeploymentResponse deployVM(String vmName) throws IOException {
-        Gson gson = new Gson();
+    public DeletionResponse deleteVM(String vmName, String namespace) throws IOException {
+        HttpResponse httpResponse = this
+                .delete(String.format("%s/%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH, vmName));
+        DeletionResponse response;
+        String body = httpResponse.getBody();
+        if (StringUtil.isEmptyOrSpaces(body)) {
+            response = new DeletionResponse(null);
+        } else {
+            response = JsonHelper.fromJson(httpResponse.getBody(), DeletionResponse.class);
+        }
+        response.setHttpResponse(httpResponse);
 
-        DeploymentRequest deploymentRequest = new DeploymentRequest(vmName);
-        String deploymentRequestJson = gson.toJson(deploymentRequest);
-        String response = this.post(this.endpoint + VM_PATH + DEPLOY_PATH, deploymentRequestJson);
-
-        return gson.fromJson(response, DeploymentResponse.class);
-    }
-
-    public DeletionResponse deleteVM(String vmName) throws IOException {
-        Gson gson = new Gson();
-
-        DeletionRequest deletionRequest = new DeletionRequest(vmName);
-        String deletionRequestJson = gson.toJson(deletionRequest);
-        String response = this.delete(this.endpoint + VM_PATH + DELETE_PATH, deletionRequestJson);
-
-        return gson.fromJson(response, DeletionResponse.class);
+        return response;
     }
 
     @VisibleForTesting
-    String getToken(String email, String password) throws IOException {
-        TokenRequest tokenRequest = new TokenRequest(email, password);
-        Gson gson = new Gson();
-        String tokenRequestJson = new Gson().toJson(tokenRequest);
-
-        String tokenResponseJson = this.post(this.endpoint + LOGIN_PATH, tokenRequestJson);
-        TokenResponse response = gson.fromJson(tokenResponseJson, TokenResponse.class);
-
-        return response.getToken();
-    }
-
-    @VisibleForTesting
-    String post(String url, String body) throws IOException {
+    HttpResponse post(String url, String body) throws IOException {
         RequestBody requestBody = RequestBody.create(JSON, body);
         Request request = this.getAuthenticatedBuilder(url).post(requestBody).build();
         return executeCall(request);
     }
 
     @VisibleForTesting
-    String get(String url) throws IOException {
+    HttpResponse get(String url) throws IOException {
         Request request = this.getAuthenticatedBuilder(url).get().build();
         return this.executeCall(request);
     }
 
     @VisibleForTesting
-    String delete(String url, String body) throws IOException {
-        RequestBody requestBody = RequestBody.create(JSON, body);
-        Request request = this.getAuthenticatedBuilder(url).delete(requestBody).build();
+    HttpResponse delete(String url) throws IOException {
+        Request request = this.getAuthenticatedBuilder(url).delete().build();
         return executeCall(request);
     }
 
     private Builder getAuthenticatedBuilder(String url) throws IOException {
-        return new Request.Builder().addHeader("Authorization", "Bearer " + this.token).url(url);
+        return new Request.Builder().addHeader(AUTHORIZATION_HEADER, BEARER + this.token).url(url);
     }
 
-    private String executeCall(Request request) throws IOException {
+    private HttpResponse executeCall(Request request) throws IOException {
+        LOG.debug("Executing request to Orka API: " + '/' + request.method() + ' ' + request.url());
         try (Response response = client.newCall(request).execute()) {
-            return response.body().string();
-        }
-    }
-
-    @Override
-    public void close() {
-        try {
-            String response = this.get(this.endpoint + HEALTH_PATH);
-            Gson gson = new Gson();
-            JsonObject jsonObject = gson.fromJson(response, JsonObject.class);
-            String apiVersionString = jsonObject.get("api_version").getAsString();
-            int apiVersion = Integer.parseInt(apiVersionString.replace(".", ""));
-
-            if (apiVersion < 211) {
-                this.delete(this.endpoint + TOKEN_PATH, "");
-            }
-        } catch (IOException e) {
-            // Catch exception and Log
-            LOG.error("Error while closing the client", e);
+            ResponseBody body = response.body();
+            return new HttpResponse(body != null ? body.string() : null, response.code(), response.isSuccessful());
         }
     }
 }

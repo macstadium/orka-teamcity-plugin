@@ -17,11 +17,11 @@ public class OrkaConstants {
     @NotNull
     public static final String ORKA_ENDPOINT = "cloud.orka.endpoint";
     @NotNull
-    public static final String ORKA_USER = "cloud.orka.user";
-    @NotNull
-    public static final String ORKA_PASSWORD = Constants.SECURE_PROPERTY_PREFIX + "cloud.orka.password";
-    @NotNull
     public static final String VM_NAME = "cloud.orka.vm.name";
+    @NotNull
+    public static final String NAMESPACE = "cloud.orka.namespace";
+    @NotNull
+    public static final String TOKEN = Constants.SECURE_PROPERTY_PREFIX + "cloud.orka.token";
     @NotNull
     public static final String VM_USER = "cloud.orka.vm.user";
     @NotNull
@@ -37,14 +37,6 @@ public class OrkaConstants {
 
     public String getOrkaEndpoint() {
         return ORKA_ENDPOINT;
-    }
-
-    public String getOrkaUser() {
-        return ORKA_USER;
-    }
-
-    public String getOrkaPassword() {
-        return ORKA_PASSWORD;
     }
 
     public String getVmName() {
@@ -73,5 +65,13 @@ public class OrkaConstants {
 
     public String getNodeMappings() {
         return NODE_MAPPINGS;
+    }
+
+    public String getNamespace() {
+        return NAMESPACE;
+    }
+
+    public String getToken() {
+        return TOKEN;
     }
 }

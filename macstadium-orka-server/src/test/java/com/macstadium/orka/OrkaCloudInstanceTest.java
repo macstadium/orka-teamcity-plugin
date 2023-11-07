@@ -43,8 +43,8 @@ public class OrkaCloudInstanceTest {
     }
 
     private OrkaCloudInstance getInstance(String instanceId, String imageId) {
-        OrkaCloudImage image = new OrkaCloudImage(imageId, "user", "password", "0", 0);
-        return new OrkaCloudInstance(image, instanceId);
+        OrkaCloudImage image = new OrkaCloudImage(imageId, "orka-default", "user", "password", "0", 0);
+        return new OrkaCloudInstance(image, instanceId, "orka-default");
     }
 
     private AgentDescription getAgentDescriptionMock(String instanceId, String imageId) {

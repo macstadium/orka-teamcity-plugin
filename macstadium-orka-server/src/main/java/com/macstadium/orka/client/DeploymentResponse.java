@@ -1,51 +1,33 @@
 package com.macstadium.orka.client;
 
-import com.google.gson.annotations.SerializedName;
+public class DeploymentResponse extends ResponseBase {
+    private String ip;
 
-public class DeploymentResponse {
-    @SerializedName("ip")
-    private String host;
+    private int ssh;
 
-    @SerializedName("ssh_port")
-    private int sshPort;
+    private String name;
 
-    @SerializedName("vm_id")
-    private String id;
-
-    private OrkaError[] errors;
-
-    private String message;
-
-    public DeploymentResponse(String host, int sshPort, String id, OrkaError[] errors, String message) {
-        this.host = host;
-        this.sshPort = sshPort;
-        this.id = id;
-        this.errors = errors != null ? errors.clone() : new OrkaError[] {};
-        this.message = message;
+    public DeploymentResponse(String ip, int ssh, String name, String message) {
+        super(message);
+        this.ip = ip;
+        this.ssh = ssh;
+        this.name = name;
     }
 
-    public String getHost() {
-        return this.host;
+    public String getIP() {
+        return this.ip;
     }
 
-    public int getSSHPort() {
-        return this.sshPort;
+    public int getSSH() {
+        return this.ssh;
     }
 
-    public String getId() {
-        return this.id;
+    public String getName() {
+        return this.name;
     }
 
-    public OrkaError[] getErrors() {
-        return this.errors.clone();
+    @Override
+    public String toString() {
+        return "DeploymentResponse [Name=" + name + ", IP=" + ip + ", SSH=" + ssh + "]";
     }
-
-    public String getMessage() {
-        return this.message;
-    }
-
-    public boolean hasErrors() {
-        return this.errors != null && this.errors.length > 0;
-    }
-
 }

@@ -1,29 +1,35 @@
 package com.macstadium.orka.client;
 
-public class VMResponse extends ResponseBase {
+public class OrkaVMConfig {
     private String name;
 
-    private int ssh;
+    private int cpu;
 
-    private String ip;
+    private String image;
 
-    public VMResponse(String name, int ssh, String ip, String message) {
-        super(message);
+    private float memory;
+
+    public OrkaVMConfig(String name, int cpu, String image, float memory) {
         this.name = name;
-        this.ssh = ssh;
-        this.ip = ip;
+        this.cpu = cpu;
+        this.image = image;
+        this.memory = memory;
     }
 
     public String getName() {
         return this.name;
     }
 
-    public int getSSH() {
-        return this.ssh;
+    public int getCPU() {
+        return this.cpu;
     }
 
-    public String getIP() {
-        return this.ip;
+    public String getImage() {
+        return this.image;
+    }
+
+    public float getMemory() {
+        return this.memory;
     }
 
     @Override
@@ -31,8 +37,9 @@ public class VMResponse extends ResponseBase {
         final int prime = 31;
         int result = 1;
         result = prime * result + ((name == null) ? 0 : name.hashCode());
-        result = prime * result + ssh;
-        result = prime * result + ((ip == null) ? 0 : ip.hashCode());
+        result = prime * result + cpu;
+        result = prime * result + ((image == null) ? 0 : image.hashCode());
+        result = prime * result + Float.floatToIntBits(memory);
         return result;
     }
 
@@ -47,7 +54,7 @@ public class VMResponse extends ResponseBase {
         if (getClass() != obj.getClass()) {
             return false;
         }
-        VMResponse other = (VMResponse) obj;
+        OrkaVMConfig other = (OrkaVMConfig) obj;
         if (name == null) {
             if (other.name != null) {
                 return false;
@@ -55,14 +62,17 @@ public class VMResponse extends ResponseBase {
         } else if (!name.equals(other.name)) {
             return false;
         }
-        if (ssh != other.ssh) {
+        if (cpu != other.cpu) {
             return false;
         }
-        if (ip == null) {
-            if (other.ip != null) {
+        if (image == null) {
+            if (other.image != null) {
                 return false;
             }
-        } else if (!ip.equals(other.ip)) {
+        } else if (!image.equals(other.image)) {
+            return false;
+        }
+        if (Float.floatToIntBits(memory) != Float.floatToIntBits(other.memory)) {
             return false;
         }
         return true;
