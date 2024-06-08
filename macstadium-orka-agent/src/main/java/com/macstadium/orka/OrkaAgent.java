@@ -51,5 +51,8 @@ public class OrkaAgent {
         List<String> contents = FileUtil.readFile(metadataFile);
         configuration.addConfigurationParameter(CommonConstants.INSTANCE_ID_PARAM_NAME, contents.get(0));
         configuration.addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, contents.get(1));
+        if (contents.size() > 2) {
+            configuration.addConfigurationParameter(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM, contents.get(2));
+        }
     }
 }
