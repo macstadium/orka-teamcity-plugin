@@ -211,12 +211,12 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         OrkaCloudInstance instance = cloudImage.startNewInstance(instanceId);
         LOG.debug(String.format("startNewInstance with temp id: %s", instanceId));
 
-        this.scheduledExecutorService.submit(() -> this.setUpVM(cloudImage, instance));
+        this.scheduledExecutorService.submit(() -> this.setUpVM(cloudImage, instance, data));
 
         return instance;
     }
 
-    private void setUpVM(OrkaCloudImage image, OrkaCloudInstance instance) {
+    private void setUpVM(OrkaCloudImage image, OrkaCloudInstance instance, @NotNull final CloudInstanceUserData data) {
         try {
             LOG.debug(
                     String.format("setUpVM deploying vm: %s, in namespace: %s", image.getName(), image.getNamespace()));
@@ -241,7 +241,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             LOG.debug("setUpVM waiting for SSH to be enabled");
             this.waitForVM(host, sshPort);
             this.remoteAgent.startAgent(instanceId, image.getId(), host, sshPort, image.getUser(), image.getPassword(),
-                    this.agentDirectory);
+                    this.agentDirectory, data);
             instance.setStatus(InstanceStatus.RUNNING);
         } catch (IOException | InterruptedException e) {
             LOG.debug("setUpVM error", e);
