@@ -37,5 +37,5 @@ In your TeamCity server:
 Once the cloud profile is successfully configured, TeamCity will automatically spin up and destroy agents in the respective orka environment.
 
 [ip-plan]: https://support.macstadium.com/hc/en-us/articles/28230867289883-IP-Plan
-[cli-create-user]: https://support.macstadium.com/hc/en-us/articles/28333357279387-Orka-Cluster-Manage-Access-to-Resources
+[cli-create-user]: https://support.macstadium.com/hc/en-us/articles/42515342171931-Authentication-and-User-Management
 [rest-create-user]: https://documenter.getpostman.com/view/6574930/S1ETRGzt?version=latest#55dcdc47-c542-4e85-88f4-e5b2c1734d50
