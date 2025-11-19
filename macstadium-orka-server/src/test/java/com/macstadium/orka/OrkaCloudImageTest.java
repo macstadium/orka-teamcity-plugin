@@ -14,14 +14,14 @@ import org.testng.annotations.Test;
 public class OrkaCloudImageTest {
     public void when_can_start_new_instance_with_no_instances_should_return_true() throws IOException {
         int maximumInstances = 5;
-        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances);
+        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances, null);
 
         assertTrue(image.canStartNewInstance());
     }
 
     public void when_can_start_new_instance_with_free_slots_should_return_true() throws IOException {
         int maximumInstances = 5;
-        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances);
+        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances, null);
         image.startNewInstance("firstInstance");
         image.startNewInstance("secondInstance");
 
@@ -30,7 +30,7 @@ public class OrkaCloudImageTest {
 
     public void when_can_start_new_instance_with_unlimited_slots_should_return_true() throws IOException {
         int maximumInstances = OrkaConstants.UNLIMITED_INSTANCES;
-        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances);
+        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances, null);
         image.startNewInstance("firstInstance");
         image.startNewInstance("secondInstance");
         image.startNewInstance("thirdInstance");
@@ -40,14 +40,14 @@ public class OrkaCloudImageTest {
 
     public void when_can_start_new_instance_with_no_slots_should_return_false() throws IOException {
         int maximumInstances = 0;
-        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances);
+        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances, null);
 
         assertFalse(image.canStartNewInstance());
     }
 
     public void when_can_start_new_instance_with_no_slots_left_should_return_false() throws IOException {
         int maximumInstances = 2;
-        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances);
+        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances, null);
         image.startNewInstance("firstInstance");
         image.startNewInstance("secondInstance");
 
@@ -57,7 +57,7 @@ public class OrkaCloudImageTest {
     public void when_start_new_instance_with_no_instances_should_return_new_instance() throws IOException {
         int maximumInstances = 2;
         String instanceId = "firstInstance";
-        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances);
+        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances, null);
         OrkaCloudInstance instance = image.startNewInstance("firstInstance");
 
         assertEquals(instanceId, instance.getInstanceId());
@@ -68,7 +68,7 @@ public class OrkaCloudImageTest {
     @Test(expectedExceptions = QuotaException.class)
     public void when_start_new_instance_with_no_instances_left_should_return_throw() throws IOException {
         int maximumInstances = 1;
-        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances);
+        OrkaCloudImage image = new OrkaCloudImage("imageId", "orka-default", "user", "password", "0", maximumInstances, null);
         image.startNewInstance("firstInstance");
         image.startNewInstance("secondInstance");
     }

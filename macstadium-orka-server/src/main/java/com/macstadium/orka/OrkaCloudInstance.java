@@ -57,9 +57,11 @@ public class OrkaCloudInstance implements CloudInstance {
     }
 
     public void setInstanceId(String id) {
+        final String oldId = this.id;
         this.image.removeInstance(this.getInstanceId());
         this.id = id;
         this.image.addInstance(this);
+        LOG.debug(String.format("Instance ID updated: %s -> %s", oldId, id));
     }
 
     @NotNull
@@ -128,11 +130,14 @@ public class OrkaCloudInstance implements CloudInstance {
 
     public boolean containsAgent(@NotNull final AgentDescription agentDescription) {
         final Map<String, String> configParams = agentDescription.getConfigurationParameters();
-        String instanceId = configParams.get(OrkaConstants.INSTANCE_ID_PARAM_NAME);
-        String imageId = configParams.get(OrkaConstants.IMAGE_ID_PARAM_NAME);
+        String agentInstanceId = configParams.get(OrkaConstants.INSTANCE_ID_PARAM_NAME);
+        String agentImageId = configParams.get(OrkaConstants.IMAGE_ID_PARAM_NAME);
 
-        LOG.debug(String.format("containsAgent with instanceId: %s and imageId: %s", instanceId, imageId));
+        boolean matches = this.id.equals(agentInstanceId) && getImageId().equals(agentImageId);
+        
+        LOG.debug(String.format("Agent match check for VM %s: agent(instance=%s, image=%s) -> %s", 
+                this.id, agentInstanceId, agentImageId, matches ? "MATCH" : "NO MATCH"));
 
-        return this.id.equals(instanceId) && getImageId().equals(imageId);
+        return matches;
     }
 }

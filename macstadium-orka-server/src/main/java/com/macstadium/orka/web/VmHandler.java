@@ -30,7 +30,7 @@ public class VmHandler implements RequestHandler {
             vmResponse = client.getVMConfigs().getConfigs();
             LOG.debug(String.format("VMs size received: %s", vmResponse.size()));
         } catch (IOException e) {
-            LOG.debug("Get VMs error", e);
+            LOG.warn("Failed to get VMs from Orka API", e);
             return new Element("vms");
         }
 

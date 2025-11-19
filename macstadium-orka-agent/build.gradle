@@ -1,5 +1,5 @@
 plugins {
-    id "com.github.rodm.teamcity-agent" version "1.2.2"
+    id "com.github.rodm.teamcity-agent" version "1.5.2"
 }
 
 teamcity {
@@ -10,12 +10,12 @@ teamcity {
 }
 
 dependencies {
-    compile project(":macstadium-orka-common")
+    implementation project(":macstadium-orka-common")
     provided "org.jetbrains.teamcity:agent-api:$teamcityVersion"
     provided "org.jetbrains.teamcity:cloud-interface:$teamcityVersion"
     provided "org.jetbrains.teamcity:cloud-shared:$teamcityVersion"
     provided "org.jetbrains.teamcity.internal:agent:$teamcityVersion"
-    testCompile "org.jetbrains.teamcity:tests-support:$teamcityVersion"
+    testImplementation "org.jetbrains.teamcity:tests-support:$teamcityVersion"
 }
 
 agentPlugin.version = null

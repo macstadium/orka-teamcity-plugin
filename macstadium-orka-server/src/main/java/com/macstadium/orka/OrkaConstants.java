@@ -29,9 +29,13 @@ public class OrkaConstants {
     @NotNull
     public static final String AGENT_DIRECTORY = "cloud.orka.vm.agent.directory";
     @NotNull
+    public static final String SERVER_URL = "cloud.orka.server.url";
+    @NotNull
     public static final String INSTANCE_LIMIT = "cloud.orka.vm.limit";
     @NotNull
     public static final String NODE_MAPPINGS = "cloud.orka.node.mappings";
+    @NotNull
+    public static final String VM_METADATA = "cloud.orka.vm.metadata";
     @NotNull
     public static final int UNLIMITED_INSTANCES = -1;
 
@@ -59,6 +63,10 @@ public class OrkaConstants {
         return AGENT_DIRECTORY;
     }
 
+    public String getServerUrl() {
+        return SERVER_URL;
+    }
+
     public String getInstanceLimit() {
         return INSTANCE_LIMIT;
     }
@@ -73,5 +81,9 @@ public class OrkaConstants {
 
     public String getToken() {
         return TOKEN;
+    }
+
+    public String getVmMetadata() {
+        return VM_METADATA;
     }
 }

@@ -91,6 +91,27 @@
                 </div>
             </td>
         </tr>
+
+        <tr>
+            <th><label for="${constants.vmMetadata}">VM Metadata:</label></th>
+            <td>
+                <div>
+                    <textarea name="prop:${constants.vmMetadata}" 
+                              id="${constants.vmMetadata}" 
+                              class="longField" 
+                              rows="3" 
+                              cols="60"
+                              placeholder="key1=value1,key2=value2,key3=value3"
+                              data-bind="initValue: vmMetadata, textInput: vmMetadata"><c:out value="${propertiesBean.properties[constants.vmMetadata]}"/></textarea>
+                    <span class="error option-error" data-bind="validationMessage: vmMetadata"></span>
+                    <span class="smallNote">
+                        Specify custom metadata as key=value pairs separated by commas.
+                        Example: build_type=ci,agent_pool=macos,owner=team-mobile
+                        <bs:help urlPrefix="https://support.macstadium.com/hc/en-us/articles/39459015068699" file=""/>
+                    </span>
+                </div>
+            </td>
+        </tr>
     </table>
     <h2 class="noBorder section-header">Advanced Settings</h2>
     <table class="runnerFormTable">
@@ -125,7 +146,17 @@
         </tr>
 
         <tr class="advancedSetting">
-            <th><label for="${constants.agentDirectory}">Node mappings:</label></th>
+            <th><label for="${constants.serverUrl}">Server URL:</label></th>
+            <td>
+                <input type="text" name="prop:${constants.serverUrl}" id="${constants.serverUrl}" class="longField" value="<c:out value="${propertiesBean.properties[constants.serverUrl]}"/>" data-bind="initValue: serverUrl, textInput: serverUrl"/>
+                <span class="smallNote">
+                    TeamCity server URL (e.g., https://teamcity.example.com). If not specified, buildAgent.properties will not be updated.
+                </span>
+            </td>
+        </tr>
+
+        <tr class="advancedSetting">
+            <th><label for="${constants.nodeMappings}">Node mappings:</label></th>
             <td>
                 <div data-bind="visible: showMappings" style="display: none">
                     <div>Edit Node Mappings:</div>
