@@ -1,7 +1,7 @@
 ext {
     def hasVersionNumber = project.hasProperty('versionNumber') && property('versionNumber') ==~ /\d+\.\d+\.\d+.*/
     versionNumber = hasVersionNumber ? property('versionNumber') : 'SNAPSHOT-' + new Date().format('yyyyMMddHHmmss')
-    teamcityVersion = findProperty('teamcityVersion') ?: '2023.11'  // Updated from 2018.1
+    teamcityVersion = findProperty('teamcityVersion') ?: '2023.11'
     projectIds = ['group': 'com.macstadium.orka', 'version': versionNumber]
 }
 group = projectIds.group
@@ -26,7 +26,8 @@ allprojects {
 
 subprojects {
     apply plugin: 'java'
-    sourceCompatibility = JavaVersion.VERSION_1_8
+    apply plugin: 'checkstyle'
+    sourceCompatibility = JavaVersion.VERSION_11
     
     tasks.withType(Test) {
         useTestNG()
