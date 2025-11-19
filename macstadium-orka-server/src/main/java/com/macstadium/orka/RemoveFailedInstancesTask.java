@@ -35,18 +35,24 @@ public class RemoveFailedInstancesTask implements Runnable {
             LOG.debug(String.format("Failed instances found for image %s", image.getName()));
 
             instancesToTerminate.forEach(instance -> {
-                LOG.debug(String.format("Removing instance with id: %s", instance.getInstanceId()));
-                VMResponse vmResponse;
+                LOG.debug(String.format("Removing failed instance: %s", instance.getInstanceId()));
                 try {
-                    vmResponse = this.client.getVM(instance.getInstanceId(), instance.getNamespace());
+                    VMResponse vmResponse = this.client.getVM(instance.getInstanceId(), instance.getNamespace());
 
                     if (vmResponse.isSuccessful()) {
+                        // VM still exists, try to delete it
                         this.tryDeleteVM(instance);
                     } else {
+                        // VM doesn't exist or authorization failed - just remove from our tracking
+                        LOG.debug(String.format("VM %s not found or inaccessible, removing from tracking", 
+                                instance.getInstanceId()));
                         this.terminateInstance(instance);
                     }
                 } catch (IOException e) {
-                    LOG.info(String.format("Failed to get VM: %s", instance.getInstanceId()), e);
+                    // Network error - try to delete anyway
+                    LOG.warn(String.format("Failed to check VM %s status, attempting deletion: %s", 
+                            instance.getInstanceId(), e.getMessage()));
+                    this.tryDeleteVM(instance);
                 }
             });
         }
@@ -58,11 +64,11 @@ public class RemoveFailedInstancesTask implements Runnable {
             if (response.isSuccessful()) {
                 this.terminateInstance(instance);
             } else {
-                LOG.info(String.format("Failed to terminate VM: %s and message: %s", instance.getInstanceId(),
+                LOG.warn(String.format("Failed to terminate VM: %s, message: %s", instance.getInstanceId(),
                         response.getHttpResponse()));
             }
         } catch (IOException e) {
-            LOG.info(String.format("Failed to terminate VM: %s", instance.getInstanceId()), e);
+            LOG.warn(String.format("Failed to terminate VM: %s", instance.getInstanceId()), e);
         }
     }
 

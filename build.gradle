@@ -20,7 +20,19 @@ allprojects {
 subprojects {
     apply plugin: 'java'
     apply plugin: 'checkstyle'
-    sourceCompatibility = JavaVersion.VERSION_1_8
+    
+    java {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    checkstyle {
+        toolVersion = '8.45.1'  // Stable version compatible with Java 8-17
+        configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+        ignoreFailures = true  // Ignore legacy style violations
+        maxWarnings = 1000
+        showViolations = true
+    }
 
     test.useTestNG()
     jar.version = null

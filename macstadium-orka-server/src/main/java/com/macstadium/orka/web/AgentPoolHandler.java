@@ -24,15 +24,18 @@ public class AgentPoolHandler implements RequestHandler {
 
     public Element handle(Map<String, String> params) {
         String projectId = params.get("projectId");
-        LOG.debug(String.format("Getting pools for projectId: %s", projectId));
+        LOG.info(String.format("AgentPoolHandler: Getting pools for projectId: %s", projectId));
 
         Map<String, String> pools = this.getAgentPools(projectId);
-        LOG.debug(String.format("Pools for projectId: %s", pools.size()));
+        LOG.info(String.format("AgentPoolHandler: Found %d pools for projectId %s: %s", 
+            pools.size(), projectId, pools));
+        
         Element result = new Element("agentPools");
         pools.entrySet().forEach(r -> {
             result.addContent(this.getPool(r.getKey(), r.getValue()));
         });
 
+        LOG.info(String.format("AgentPoolHandler: Returning XML: %s", result));
         return result;
     }
 

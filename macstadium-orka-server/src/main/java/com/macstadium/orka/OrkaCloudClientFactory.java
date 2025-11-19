@@ -75,6 +75,7 @@ public class OrkaCloudClientFactory implements CloudClientFactory {
     @NotNull
     public OrkaCloudClient createNewClient(@NotNull final CloudState state,
             @NotNull final CloudClientParameters params) {
-        return new OrkaCloudClient(params, executorServices);
+        // serverUrl is read from Cloud Profile parameters in OrkaCloudClient constructor
+        return new OrkaCloudClient(params, executorServices, null);
     }
 }

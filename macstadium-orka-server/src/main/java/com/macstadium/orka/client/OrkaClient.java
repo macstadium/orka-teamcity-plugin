@@ -48,11 +48,26 @@ public class OrkaClient {
     }
 
     public VMResponse getVM(String vmName, String namespace) throws IOException {
+        LOG.debug(String.format("Getting VM status for %s in namespace %s", vmName, namespace));
+        
         HttpResponse httpResponse = this
                 .get(String.format("%s/%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH, vmName));
 
+        LOG.debug(String.format("VM status API response: %s", httpResponse.getBody()));
+        
         VMResponse response = JsonHelper.fromJson(httpResponse.getBody(), VMResponse.class);
         response.setHttpResponse(httpResponse);
+        
+        // Only log successful responses, not authorization errors
+        if (response.isSuccessful() && response.getIP() != null) {
+            LOG.debug(String.format("VM %s found: IP=%s, SSH port=%d", 
+                    vmName, response.getIP(), response.getSSH()));
+        } else if (!response.isSuccessful()) {
+            LOG.warn(String.format("Failed to get VM %s status: %s (HTTP %d)", 
+                    vmName, response.getMessage(), 
+                    httpResponse.getCode()));
+        }
+        
         return response;
     }
 
@@ -73,16 +88,34 @@ public class OrkaClient {
         return response;
     }
 
-    public DeploymentResponse deployVM(String vmConfig, String namespace) throws IOException {
-        DeploymentRequest deploymentRequest = new DeploymentRequest(vmConfig);
+    public DeploymentResponse deployVM(String vmConfig, String namespace, String vmMetadata) throws IOException {
+        DeploymentRequest deploymentRequest;
+
+        if (StringUtil.isNotEmpty(vmMetadata)) {
+            deploymentRequest = new DeploymentRequest(vmConfig, vmMetadata);
+            LOG.info(String.format("Deploying VM: config=%s, namespace=%s, metadata=%s", 
+                    vmConfig, namespace, deploymentRequest.getCustomMetadata()));
+        } else {
+            deploymentRequest = new DeploymentRequest(vmConfig);
+            LOG.info(String.format("Deploying VM: config=%s, namespace=%s", vmConfig, namespace));
+        }
+
         String deploymentRequestJson = new Gson().toJson(deploymentRequest);
+        LOG.debug(String.format("Request JSON: %s", deploymentRequestJson));
 
         HttpResponse httpResponse = this.post(
                 String.format("%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH), deploymentRequestJson);
+        
+        LOG.debug(String.format("API response: %s", httpResponse.getBody()));
+        
         DeploymentResponse response = JsonHelper.fromJson(httpResponse.getBody(), DeploymentResponse.class);
         response.setHttpResponse(httpResponse);
 
         return response;
+    }
+
+    public DeploymentResponse deployVM(String vmConfig, String namespace) throws IOException {
+        return deployVM(vmConfig, namespace, null);
     }
 
     public DeletionResponse deleteVM(String vmName, String namespace) throws IOException {

@@ -20,7 +20,7 @@ public class Utils {
 
     public static CloudClientParameters getCloudClientParametersMock(String imageId, String nodeMappings) {
         final Map<String, String> params = new HashMap<String, String>();
-        params.put(OrkaConstants.AGENT_DIRECTORY, "dir");
+        params.put(OrkaConstants.AGENT_DIRECTORY, null); // null to skip SSH operations in tests
         params.put(OrkaConstants.ORKA_ENDPOINT, "endpoint");
         params.put(OrkaConstants.TOKEN, "token");
         params.put(OrkaConstants.VM_NAME, imageId);

@@ -47,6 +47,10 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
   self.currentAgentPoolId = ko.observable();
 
   self.agentDirectory = ko.observable().extend({ required: true });
+  
+  self.serverUrl = ko.observable(); // Optional field
+
+  self.vmMetadata = ko.observable(); // Optional field
 
   self.showMappings = ko.observable(false);
   self.initialNodeMappings = ko.observable();
@@ -103,8 +107,13 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
       config.baseUrl +
       "?resource=agentPools&projectId=" +
       encodeURIComponent(config.projectId);
+    
+    console.log("Loading agent pools from: " + url);
+    console.log("ProjectId: " + config.projectId);
+    
     return $.post(url)
       .then(function (response) {
+        console.log("Agent pools response:", response);
         var $response = $(response);
         var agentPools = $response
           .find("agentPools:eq(0) agentPool")
@@ -116,8 +125,13 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
           })
           .get();
 
+        console.log("Parsed agent pools:", agentPools);
         self.agentPools(agentPools);
         self.currentAgentPoolId(self.agentPoolId());
+      })
+      .fail(function(xhr, status, error) {
+        console.error("Failed to load agent pools:", status, error);
+        console.error("Response:", xhr.responseText);
       })
       .always(function () {
         self.loadingAgentPools(false);
