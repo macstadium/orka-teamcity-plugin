@@ -4,120 +4,120 @@
 
 ### When does TeamCity start a new VM?
 
-TeamCity **самостоятельно** принимает решение о запуске VM через Cloud Plugin API. Плагин **не контролирует** это решение, а только реагирует на запросы от TeamCity.
+TeamCity **independently** decides to start a VM through the Cloud Plugin API. The plugin **does not control** this decision - it only reacts to requests from TeamCity.
 
-### Основные триггеры запуска VM
+### Main VM Startup Triggers
 
-#### 1. **Build в очереди (основной триггер)**
+#### 1. **Build in Queue (Main Trigger)**
 
 ```
-Билд добавлен в очередь
+Build added to queue
     ↓
-TeamCity ищет доступный агент в нужном пуле
+TeamCity searches for available agent in required pool
     ↓
-Нет свободных агентов?
+No free agents?
     ↓
-TeamCity вызывает canStartNewInstance()
+TeamCity calls canStartNewInstance()
     ↓
-Если true → вызывает startNewInstance()
+If true → calls startNewInstance()
     ↓
-VM создаётся
+VM is created
 ```
 
-**Условия:**
+**Conditions:**
 
-- Есть билд в очереди
-- Билд требует агента из определённого пула
-- В этом пуле нет свободных агентов
-- Лимит инстансов не достигнут (`instanceLimit`)
+- There is a build in queue
+- Build requires an agent from a specific pool
+- No free agents in that pool
+- Instance limit not reached (`instanceLimit`)
 
-#### 2. **Тестирование профиля после создания**
+#### 2. **Profile Testing After Creation**
 
-При создании/сохранении Cloud Profile, TeamCity может:
+When creating/saving a Cloud Profile, TeamCity may:
 
-- Проверить connectivity к Orka endpoint
-- **Попытаться создать тестовую VM** для валидации конфигурации
-- Проверить доступность API
+- Check connectivity to Orka endpoint
+- **Attempt to create a test VM** to validate configuration
+- Verify API availability
 
-**Это объясняет, почему VM может стартовать сразу после создания профиля без нагрузки!**
+**This explains why a VM may start immediately after profile creation without any load!**
 
-#### 3. **Агент переподключается (reconnect)**
+#### 3. **Agent Reconnects**
 
-Если агент с Orka VM уже существует (например, VM создана вручную в Orka) и подключается к TeamCity, плагин может зарегистрировать его через метод `findInstanceByAgent()`.
+If an agent with an Orka VM already exists (e.g., VM created manually in Orka) and connects to TeamCity, the plugin can register it through the `findInstanceByAgent()` method.
 
-#### 4. **Периодические проверки TeamCity**
+#### 4. **Periodic TeamCity Checks**
 
-TeamCity может периодически вызывать методы плагина для:
+TeamCity may periodically call plugin methods to:
 
-- Обновления статуса инстансов
-- Проверки доступности cloud provider
-- Сбора метрик
+- Update instance status
+- Check cloud provider availability
+- Collect metrics
 
-### Кодовый путь создания VM
+### VM Creation Code Path
 
 ```java
-// 1. TeamCity вызывает
+// 1. TeamCity calls
 OrkaCloudClient.canStartNewInstance(image)
     ↓
-// 2. Проверяется лимит
+// 2. Check limit
 OrkaCloudImage.canStartNewInstance()
     return instanceLimit > currentInstances.size()
     ↓
-// 3. Если true, TeamCity вызывает
+// 3. If true, TeamCity calls
 OrkaCloudClient.startNewInstance(image, userData)
     ↓
-// 4. Создаётся instance object
+// 4. Create instance object
 OrkaCloudInstance instance = cloudImage.startNewInstance(instanceId)
     ↓
-// 5. Асинхронно запускается setup
+// 5. Asynchronously start setup
 scheduledExecutorService.submit(() -> setUpVM(...))
     ↓
-// 6. Deployment в Orka
+// 6. Deploy in Orka
 orkaClient.deployVM(vmName, namespace, metadata)
     ↓
-// 7. Проверка и ожидание VM
+// 7. Check and wait for VM
 orkaClient.getVM(instanceId, namespace)
 sshUtil.waitForSSH(host, port)
     ↓
-// 8. Конфигурация агента
+// 8. Configure agent
 updateBuildAgentPropertiesOnce(...)
 remoteAgent.startAgent(...)
     ↓
-// 9. Instance статус → RUNNING
+// 9. Instance status → RUNNING
 ```
 
-## Почему VM запускается без нагрузки?
+## Why Does VM Start Without Load?
 
-### Возможные причины
+### Possible Reasons
 
-1. **TeamCity проверяет профиль после сохранения**
-   - Это нормальное поведение TeamCity
-   - VM создаётся для валидации конфигурации
-   - После проверки может быть удалена или оставлена idle
+1. **TeamCity validates profile after saving**
+   - This is normal TeamCity behavior
+   - VM is created to validate configuration
+   - After validation it may be deleted or left idle
 
-2. **Настройки "Test connection" включены**
-   - При сохранении профиля TeamCity может делать тестовый запуск
-   - Проверяется весь путь: Orka API → VM deploy → SSH → Agent start
+2. **"Test connection" settings enabled**
+   - When saving profile, TeamCity may do a test run
+   - Verifies entire path: Orka API → VM deploy → SSH → Agent start
 
-3. **Agent Pool требует minimum agents**
-   - В некоторых версиях TeamCity можно настроить minimum количество агентов в пуле
-   - TeamCity будет поддерживать это минимальное количество
+3. **Agent Pool requires minimum agents**
+   - In some TeamCity versions you can configure minimum number of agents in pool
+   - TeamCity will maintain this minimum count
 
-4. **Existing VM в Orka**
-   - Если в Orka уже есть VM с тем же именем
-   - Плагин может "подобрать" её через `findInstanceByAgent()`
+4. **Existing VM in Orka**
+   - If a VM with the same name already exists in Orka
+   - Plugin may "pick it up" through `findInstanceByAgent()`
 
-## Как контролировать запуск VM?
+## How to Control VM Startup?
 
-### 1. **Instance Limit (основной контроль)**
+### 1. **Instance Limit (Main Control)**
 
 ```
-Maximum instances count = 0  → VM не будут создаваться вообще
-Maximum instances count = 1  → Максимум 1 VM одновременно
-Maximum instances count = 10 → До 10 VM параллельно
+Maximum instances count = 0  → VMs won't be created at all
+Maximum instances count = 1  → Maximum 1 VM at a time
+Maximum instances count = 10 → Up to 10 VMs in parallel
 ```
 
-Проверка в коде:
+Check in code:
 
 ```java
 public synchronized boolean canStartNewInstance() {
@@ -126,52 +126,52 @@ public synchronized boolean canStartNewInstance() {
 }
 ```
 
-### 2. **Agent Pool assignment**
+### 2. **Agent Pool Assignment**
 
-- VM создаются только для билдов, требующих агентов из **конкретного пула**
-- Если билды не требуют этот пул → VM не создаются
+- VMs are created only for builds requiring agents from **specific pool**
+- If builds don't require this pool → VMs are not created
 
-### 3. **Pause/Disable профиля**
+### 3. **Pause/Disable Profile**
 
-- В TeamCity можно поставить Cloud Profile на паузу
-- Профиль не будет создавать новые VM
-- Существующие VM продолжат работать
+- In TeamCity you can pause a Cloud Profile
+- Profile will not create new VMs
+- Existing VMs will continue running
 
-### 4. **Build configuration requirements**
+### 4. **Build Configuration Requirements**
 
-- Настройте требования к агентам в build configuration
-- VM будут создаваться только если требования совпадают
+- Configure agent requirements in build configuration
+- VMs will be created only if requirements match
 
-## Автоматическая очистка VM
+## Automatic VM Cleanup
 
-### Когда VM удаляется?
+### When is VM Deleted?
 
-1. **Build завершён + idle timeout истёк**
-   - После завершения билда агент становится idle
-   - TeamCity ждёт настроенный idle timeout
-   - Затем вызывает `terminateInstance()`
+1. **Build completed + idle timeout expired**
+   - After build completes, agent becomes idle
+   - TeamCity waits for configured idle timeout
+   - Then calls `terminateInstance()`
 
-2. **VM failed во время setup**
-   - Ошибка deployment в Orka
-   - SSH недоступен
-   - Agent не запустился
-   - → VM автоматически удаляется
+2. **VM failed during setup**
+   - Deployment error in Orka
+   - SSH unavailable
+   - Agent didn't start
+   - → VM automatically deleted
 
-3. **Периодическая очистка failed instances**
+3. **Periodic cleanup of failed instances**
 
    ```java
-   RemoveFailedInstancesTask - запускается каждые 5 минут
+   RemoveFailedInstancesTask - runs every 5 minutes
    ```
 
-   Удаляет VM в статусе ERROR или с проблемами
+   Deletes VMs in ERROR status or with problems
 
 4. **Manual termination**
-   - Через TeamCity UI: Agents → Cloud → Stop
-   - Вызывает `terminateInstance()`
+   - Through TeamCity UI: Agents → Cloud → Stop
+   - Calls `terminateInstance()`
 
-## Диагностика
+## Diagnostics
 
-### Логи для отладки триггеров
+### Logs for Debugging Triggers
 
 1. **TeamCity Server logs:**
 
@@ -179,10 +179,10 @@ public synchronized boolean canStartNewInstance() {
    <TeamCity_data_directory>/logs/teamcity-clouds.log
    ```
 
-   Показывает все вызовы Cloud Plugin API
+   Shows all Cloud Plugin API calls
 
 2. **Orka Plugin logs:**
-   Ищите в `teamcity-clouds.log`:
+   Look for in `teamcity-clouds.log`:
 
    ```
    [Orka Cloud] startNewInstance with temp id: <uuid>
@@ -190,55 +190,55 @@ public synchronized boolean canStartNewInstance() {
    [Orka Cloud] VM deployed: <instanceId>
    ```
 
-3. **Проверка canStartNewInstance:**
+3. **Check canStartNewInstance:**
 
    ```
    [Orka Cloud] Quota exceeded. Number of instances: X and limit: Y
    ```
 
-   Показывает когда лимит достигнут
+   Shows when limit is reached
 
-### Полезные команды для проверки
+### Useful Commands for Verification
 
 ```bash
-# Проверить существующие VM в Orka
+# Check existing VMs in Orka
 curl -X GET "https://<orka-endpoint>/resources/vm/list" \
   -H "Authorization: Bearer <token>"
 
-# Проверить количество агентов в пуле через TeamCity API
+# Check number of agents in pool via TeamCity API
 curl "http://<teamcity>/app/rest/agentPools/id:<poolId>/agents" \
   -u "username:password"
 ```
 
 ## Best Practices
 
-### Избежать неожиданных VM
+### Avoid Unexpected VMs
 
-1. **Начните с малого лимита**
+1. **Start with small limit**
 
    ```
    Maximum instances count = 1
    ```
 
-   После тестирования увеличьте
+   Increase after testing
 
-2. **Мониторьте Orka dashboard**
-   - Проверяйте количество активных VM
-   - Настройте алерты на превышение лимитов
+2. **Monitor Orka dashboard**
+   - Check number of active VMs
+   - Set up alerts for limit violations
 
-3. **Используйте отдельный Agent Pool**
-   - Создайте dedicated пул только для Orka агентов
-   - Не используйте Default pool
+3. **Use separate Agent Pool**
+   - Create dedicated pool only for Orka agents
+   - Don't use Default pool
 
-4. **Настройте build requirements**
-   - Явно указывайте требования к агентам
-   - VM будут создаваться только для matching builds
+4. **Configure build requirements**
+   - Explicitly specify agent requirements
+   - VMs will be created only for matching builds
 
-5. **Test на staging окружении**
-   - Сначала протестируйте профиль на test Orka environment
-   - Проверьте поведение создания/удаления VM
+5. **Test on staging environment**
+   - First test profile on test Orka environment
+   - Verify VM creation/deletion behavior
 
-6. **Регулярно проверяйте логи**
+6. **Regularly check logs**
 
    ```bash
    tail -f <TeamCity_data_directory>/logs/teamcity-clouds.log | grep "Orka"
@@ -246,34 +246,34 @@ curl "http://<teamcity>/app/rest/agentPools/id:<poolId>/agents" \
 
 ## FAQ
 
-**Q: Почему VM создалась сразу после создания профиля?**
-A: TeamCity тестирует профиль после сохранения. Это нормально.
+**Q: Why did VM create immediately after profile creation?**
+A: TeamCity tests the profile after saving. This is normal behavior.
 
-**Q: Как запретить автоматическое создание VM?**
-A: Установите `Maximum instances count = 0` или поставьте профиль на паузу.
+**Q: How to prevent automatic VM creation?**
+A: Set `Maximum instances count = 0` or pause the profile.
 
-**Q: VM создаётся, но билды не запускаются на ней**
-A: Проверьте:
+**Q: VM is created but builds don't run on it**
+A: Check:
 
 - Agent Pool assignment
 - Build requirements
-- Agent authorization в TeamCity
+- Agent authorization in TeamCity
 
-**Q: VM не удаляется после билда**
-A: Проверьте idle timeout settings в Cloud Profile.
+**Q: VM is not deleted after build**
+A: Check idle timeout settings in Cloud Profile.
 
-**Q: Как создать VM заранее (pre-warming)?**
-A: TeamCity не поддерживает explicit pre-warming в Cloud Plugin API. VM создаются только on-demand. Но вы можете:
+**Q: How to create VMs in advance (pre-warming)?**
+A: TeamCity doesn't support explicit pre-warming in Cloud Plugin API. VMs are created only on-demand. But you can:
 
-- Создать dummy build который периодически запускается
-- Установить выше instance limit чтобы VM оставались idle
+- Create dummy build that runs periodically
+- Set higher instance limit so VMs remain idle
 
 ## Summary
 
-**Ключевые моменты:**
+**Key Points:**
 
-1. ✅ **TeamCity** контролирует когда создавать VM, не плагин
-2. ✅ Основной триггер: **билд в очереди + нет свободных агентов**
-3. ✅ VM может создаться при **тестировании профиля**
-4. ✅ Контроль через **Instance Limit** и **Agent Pool**
-5. ✅ Автоматическая очистка failed instances каждые 5 минут
+1. ✅ **TeamCity** controls when to create VMs, not the plugin
+2. ✅ Main trigger: **build in queue + no free agents**
+3. ✅ VM may be created when **testing profile**
+4. ✅ Control through **Instance Limit** and **Agent Pool**
+5. ✅ Automatic cleanup of failed instances every 5 minutes

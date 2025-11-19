@@ -8,8 +8,10 @@ The plugin uses [gradle plugin][gradle-plugin] to build and package the plugin. 
 
 ## Build requirements
 
-- JDK 8 (Java 8)
+- JDK 17 (Java 17)
 - Gradle 7.6.4 (included via wrapper)
+
+**Note:** The project is compiled with Java 8 compatibility (source/target) but requires JDK 17 to build.
 
 ## Project structure
 
@@ -95,7 +97,7 @@ For detailed setup instructions, see [setup guide](wiki/setup.md) and [usage gui
 If you encounter build issues:
 
 1. Clean the build: `./gradlew clean`
-2. Ensure you're using JDK 8
+2. Ensure you're using JDK 17
 3. Check that Gradle wrapper can download dependencies (network access required)
 
 ### Test failures
@@ -104,7 +106,7 @@ If tests fail, ensure:
 
 - No real Orka environment is required for tests (tests use mocks)
 - All test dependencies are properly resolved
-- JDK 8 is being used
+- JDK 17 is being used
 
 ### Checkstyle warnings
 
