@@ -16,25 +16,3 @@ dependencies {
     provided "org.jetbrains.teamcity.internal:agent:$teamcityVersion"
     testImplementation "org.jetbrains.teamcity:tests-support:$teamcityVersion"
 }
-
-tasks.named('agentPlugin') {
-    archiveVersion.set('')
-}
-subprojects {
-    apply plugin: 'java'
-    apply plugin: 'checkstyle'
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    
-    checkstyle {
-        toolVersion = '10.12.5'
-        configFile = rootProject.file('config/checkstyle/checkstyle.xml')
-    }
-    
-    tasks.withType(Test) {
-        useTestNG()
-    }
-    
-    tasks.withType(Jar) {
-        archiveVersion.set('')
-    }
-}
