@@ -33,6 +33,18 @@ dependencies {
     implementation("com.hierynomus:sshj:0.27.0") {
         exclude group: "org.slf4j"
     }
+    
+    // AWS SDK for EKS token generation (IRSA support)
+    implementation platform("software.amazon.awssdk:bom:2.21.0")
+    implementation("software.amazon.awssdk:sts") {
+        exclude group: "org.slf4j"
+    }
+    implementation("software.amazon.awssdk:auth") {
+        exclude group: "org.slf4j"
+    }
+    implementation("software.amazon.awssdk:apache-client") {
+        exclude group: "org.slf4j"
+    }
     provided "org.jetbrains.teamcity:server-api:$teamcityVersion"
     provided "org.jetbrains.teamcity:server-web-api:$teamcityVersion"
     provided "org.jetbrains.teamcity:cloud-interface:$teamcityVersion"

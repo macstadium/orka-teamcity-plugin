@@ -37,6 +37,12 @@ public class OrkaConstants {
     @NotNull
     public static final String VM_METADATA = "cloud.orka.vm.metadata";
     @NotNull
+    public static final String USE_AWS_IAM = "cloud.orka.use.aws.iam";
+    @NotNull
+    public static final String AWS_EKS_CLUSTER_NAME = "cloud.orka.aws.eks.cluster";
+    @NotNull
+    public static final String AWS_REGION = "cloud.orka.aws.region";
+    @NotNull
     public static final int UNLIMITED_INSTANCES = -1;
 
     public String getOrkaEndpoint() {
@@ -85,5 +91,17 @@ public class OrkaConstants {
 
     public String getVmMetadata() {
         return VM_METADATA;
+    }
+
+    public String getUseAwsIam() {
+        return USE_AWS_IAM;
+    }
+
+    public String getAwsEksClusterName() {
+        return AWS_EKS_CLUSTER_NAME;
+    }
+
+    public String getAwsRegion() {
+        return AWS_REGION;
     }
 }

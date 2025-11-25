@@ -35,12 +35,13 @@ public class OrkaCloudImage implements CloudImage {
 
     public OrkaCloudImage(@NotNull final String imageId, @NotNull final String namespace, @NotNull final String user,
             @NotNull final String password,
-            @NotNull final String agentPoolId, int instanceLimit, @Nullable final String vmMetadata) {
+            @Nullable final String agentPoolId, int instanceLimit, @Nullable final String vmMetadata) {
         this.id = imageId;
         this.namespace = namespace;
         this.user = user;
         this.password = password;
-        this.agentPoolId = Integer.parseInt(agentPoolId);
+        // Default to 0 if agentPoolId is not specified (will use default pool)
+        this.agentPoolId = (agentPoolId != null && !agentPoolId.isEmpty()) ? Integer.parseInt(agentPoolId) : 0;
         this.instanceLimit = instanceLimit;
         this.vmMetadata = vmMetadata;
     }

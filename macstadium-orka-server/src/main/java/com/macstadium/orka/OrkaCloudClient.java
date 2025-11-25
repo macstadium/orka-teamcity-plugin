@@ -2,9 +2,12 @@ package com.macstadium.orka;
 
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
+import com.macstadium.orka.client.AwsEksTokenProvider;
 import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.OrkaClient;
+import com.macstadium.orka.client.StaticTokenProvider;
+import com.macstadium.orka.client.TokenProvider;
 import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
@@ -63,17 +66,11 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     // Read serverUrl from Cloud Profile parameters (user-configured)
     this.serverUrl = params.getParameter(OrkaConstants.SERVER_URL);
 
-    LOG.info(String.format("Orka Cloud Client initialized (agentDir: %s, serverUrl: %s)",
-        this.agentDirectory != null ? this.agentDirectory : "NOT SET",
-        this.serverUrl != null ? this.serverUrl : "NOT SET"));
-
     if (this.agentDirectory == null || this.agentDirectory.trim().isEmpty()) {
-      LOG.warn("Agent Directory not configured! Set it in Cloud Profile Advanced Settings.");
+      LOG.debug("Agent Directory not configured - using default from VM image");
     }
-
     if (this.serverUrl == null || this.serverUrl.trim().isEmpty()) {
-      LOG.info(
-          "Server URL not configured. buildAgent.properties will not be updated - agent will use existing serverUrl from VM image.");
+      LOG.debug("Server URL not configured - agent will use serverUrl from VM image");
     }
 
     this.images.add(this.createImage(params));
@@ -112,13 +109,37 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
   private void initializeOrkaClient(CloudClientParameters params) {
     String endpoint = params.getParameter(OrkaConstants.ORKA_ENDPOINT);
-    String token = params.getParameter(OrkaConstants.TOKEN);
+    String useAwsIamParam = params.getParameter(OrkaConstants.USE_AWS_IAM);
+    boolean useAwsIam = "true".equalsIgnoreCase(useAwsIamParam);
 
-    LOG.debug(
-        String.format("OrkaCloudClient with endpoint: %s, agentDirectory: %s", endpoint, this.agentDirectory));
     try {
-      this.orkaClient = new OrkaClient(endpoint, token);
-    } catch (IOException e) {
+      TokenProvider tokenProvider;
+
+      if (useAwsIam) {
+        String clusterName = params.getParameter(OrkaConstants.AWS_EKS_CLUSTER_NAME);
+        String region = params.getParameter(OrkaConstants.AWS_REGION);
+
+        if (StringUtil.isEmpty(clusterName) || StringUtil.isEmpty(region)) {
+          String errorMsg = String.format(
+              "AWS IAM authentication requires both cluster name and region. Got: cluster='%s', region='%s'",
+              clusterName, region);
+          LOG.error(errorMsg);
+          this.errorInfo = new CloudErrorInfo("Invalid AWS IAM configuration", errorMsg);
+          return;
+        }
+
+        tokenProvider = new AwsEksTokenProvider(clusterName, region);
+        LOG.info(String.format("OrkaClient initialized with AWS IAM auth (cluster: %s, region: %s)",
+            clusterName, region));
+      } else {
+        String token = params.getParameter(OrkaConstants.TOKEN);
+        tokenProvider = new StaticTokenProvider(token);
+        LOG.info("OrkaClient initialized with static token");
+      }
+
+      this.orkaClient = new OrkaClient(endpoint, tokenProvider);
+    } catch (Exception e) {
+      LOG.error("Failed to initialize Orka client", e);
       this.errorInfo = new CloudErrorInfo("Cannot initialize Orka client", e.toString(), e);
     }
   }
@@ -142,9 +163,22 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     int limit = StringUtil.isEmpty(instanceLimit) ? OrkaConstants.UNLIMITED_INSTANCES
         : Integer.parseInt(instanceLimit);
 
-    LOG.debug(String.format(
-        "OrkaCloudClient createImage with vm: %s, user: %s, poolId: %s, instanceLimit: %s, metadata: %s", vm,
-        vmUser, agentPoolId, instanceLimit, vmMetadata));
+    LOG.debug(String.format("createImage: vm='%s', namespace='%s', poolId='%s', limit=%s",
+        vm, namespace, agentPoolId, instanceLimit));
+
+    // Validate required parameters
+    if (StringUtil.isEmpty(vm)) {
+      throw new IllegalArgumentException("VM Config must be specified in Cloud Profile settings");
+    }
+    if (StringUtil.isEmpty(namespace)) {
+      namespace = "orka-default";
+    }
+    if (StringUtil.isEmpty(vmUser)) {
+      throw new IllegalArgumentException("VM User must be specified");
+    }
+    if (StringUtil.isEmpty(vmPassword)) {
+      throw new IllegalArgumentException("VM Password must be specified");
+    }
 
     return new OrkaCloudImage(vm, namespace, vmUser, vmPassword, agentPoolId, limit, vmMetadata);
   }

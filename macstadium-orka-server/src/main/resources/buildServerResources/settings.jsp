@@ -31,12 +31,56 @@
         </tr>
 
         <tr>
+            <th><label for="${constants.useAwsIam}">Authentication:</label></th>
+            <td>
+                <input type="checkbox" name="prop:${constants.useAwsIam}" 
+                       id="${constants.useAwsIam}"
+                       value="true"
+                       data-bind="checked: useAwsIam"/>
+                <label for="${constants.useAwsIam}">Use AWS IAM (EKS Token)</label>
+                <input type="hidden" name="prop:${constants.useAwsIam}" value="<c:out value="${propertiesBean.properties[constants.useAwsIam]}"/>" data-bind="initValue: useAwsIamInit"/>
+                <span class="smallNote">
+                    Enable to use AWS IAM role for authentication. Requires IRSA configuration in EKS.
+                </span>
+            </td>
+        </tr>
+
+        <tr data-bind="visible: !useAwsIam()">
             <th><label for="${constants.token}">Orka Token: <l:star/></label></th>
             <td>
                 <props:passwordProperty name="${constants.token}" className="settings longField"/>
                 <span class="error option-error" data-bind="validationMessage: token"></span>
                 <span class="smallNote">
                     Service account token used to access Orka.
+                </span>
+            </td>
+        </tr>
+
+        <tr data-bind="visible: useAwsIam()">
+            <th><label for="${constants.awsEksClusterName}">EKS Cluster Name: <l:star/></label></th>
+            <td>
+                <input type="text" name="prop:${constants.awsEksClusterName}" 
+                       id="${constants.awsEksClusterName}" class="longField" 
+                       value="<c:out value="${propertiesBean.properties[constants.awsEksClusterName]}"/>" 
+                       data-bind="initValue: awsClusterName, textInput: awsClusterName"/>
+                <span class="error option-error" data-bind="validationMessage: awsClusterName"></span>
+                <span class="smallNote">
+                    Name of the Orka EKS cluster for token generation.
+                </span>
+            </td>
+        </tr>
+
+        <tr data-bind="visible: useAwsIam()">
+            <th><label for="${constants.awsRegion}">AWS Region: <l:star/></label></th>
+            <td>
+                <input type="text" name="prop:${constants.awsRegion}" 
+                       id="${constants.awsRegion}" class="longField"
+                       placeholder="us-east-1"
+                       value="<c:out value="${propertiesBean.properties[constants.awsRegion]}"/>" 
+                       data-bind="initValue: awsRegion, textInput: awsRegion"/>
+                <span class="error option-error" data-bind="validationMessage: awsRegion"></span>
+                <span class="smallNote">
+                    AWS region where the Orka EKS cluster is located.
                 </span>
             </td>
         </tr>

@@ -8,9 +8,22 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
   self.loadingAgentPools = ko.observable(false);
 
   self.orkaEndpoint = ko.observable().extend({ throttle: 300, required: true });
-  self.token = ko.observable().extend({ throttle: 300, required: true });
+  self.token = ko.observable().extend({ throttle: 300 });
   self.tokenEncrypted = ko.observable();
   self.namespace = ko.observable().extend({ throttle: 300, required: true });
+
+  // AWS IAM authentication
+  self.useAwsIam = ko.observable(false);
+  self.useAwsIamInit = ko.observable();
+  self.awsClusterName = ko.observable().extend({ throttle: 300 });
+  self.awsRegion = ko.observable().extend({ throttle: 300 });
+
+  // Initialize useAwsIam from saved value
+  self.useAwsIamInit.subscribe(function (data) {
+    if (data === "true" || data === true) {
+      self.useAwsIam(true);
+    }
+  });
 
   self.namespace.subscribe(function (data) {
     if (!self.namespaceInitialized && !data) {
@@ -32,6 +45,19 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
   });
 
   self.tokenEncrypted.subscribe(function () {
+    self.loadInfo();
+  });
+
+  // Reload VMs when AWS IAM settings change
+  self.useAwsIam.subscribe(function () {
+    self.loadInfo();
+  });
+
+  self.awsClusterName.subscribe(function () {
+    self.loadInfo();
+  });
+
+  self.awsRegion.subscribe(function () {
     self.loadInfo();
   });
 
@@ -82,14 +108,30 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
   };
 
   function getCredentials() {
-    if (!self.orkaEndpoint() || !self.tokenEncrypted()) {
+    if (!self.orkaEndpoint()) {
       return null;
     }
 
-    return {
-      orkaEndpoint: self.orkaEndpoint(),
-      token: self.tokenEncrypted(),
-    };
+    if (self.useAwsIam()) {
+      if (!self.awsClusterName() || !self.awsRegion()) {
+        return null;
+      }
+      return {
+        orkaEndpoint: self.orkaEndpoint(),
+        useAwsIam: "true",
+        awsClusterName: self.awsClusterName(),
+        awsRegion: self.awsRegion(),
+      };
+    } else {
+      if (!self.tokenEncrypted()) {
+        return null;
+      }
+      return {
+        orkaEndpoint: self.orkaEndpoint(),
+        useAwsIam: "false",
+        token: self.tokenEncrypted(),
+      };
+    }
   }
 
   function getVms($response) {
