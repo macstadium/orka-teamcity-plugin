@@ -6,18 +6,25 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class DeploymentRequest {
+  private String name;
   private String vmConfig;
 
   @SerializedName("customMetadata")
   private Map<String, String> customMetadata;
 
-  public DeploymentRequest(String vmConfig) {
+  public DeploymentRequest(String name, String vmConfig) {
+    this.name = name;
     this.vmConfig = vmConfig;
   }
 
-  public DeploymentRequest(String vmConfig, String vmMetadataString) {
+  public DeploymentRequest(String name, String vmConfig, String vmMetadataString) {
+    this.name = name;
     this.vmConfig = vmConfig;
     this.customMetadata = parseMetadata(vmMetadataString);
+  }
+
+  public String getName() {
+    return name;
   }
 
   public String getVmConfig() {

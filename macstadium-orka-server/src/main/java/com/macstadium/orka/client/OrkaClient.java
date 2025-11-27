@@ -114,16 +114,17 @@ public class OrkaClient {
     return response;
   }
 
-  public DeploymentResponse deployVM(String vmConfig, String namespace, String vmMetadata) throws IOException {
+  public DeploymentResponse deployVM(String vmName, String vmConfig, String namespace, String vmMetadata)
+      throws IOException {
     DeploymentRequest deploymentRequest;
 
     if (StringUtil.isNotEmpty(vmMetadata)) {
-      deploymentRequest = new DeploymentRequest(vmConfig, vmMetadata);
-      LOG.info(String.format("Deploying VM: config=%s, namespace=%s, metadata=%s",
-          vmConfig, namespace, deploymentRequest.getCustomMetadata()));
+      deploymentRequest = new DeploymentRequest(vmName, vmConfig, vmMetadata);
+      LOG.info(String.format("Deploying VM: name=%s, config=%s, namespace=%s, metadata=%s",
+          vmName, vmConfig, namespace, deploymentRequest.getCustomMetadata()));
     } else {
-      deploymentRequest = new DeploymentRequest(vmConfig);
-      LOG.info(String.format("Deploying VM: config=%s, namespace=%s", vmConfig, namespace));
+      deploymentRequest = new DeploymentRequest(vmName, vmConfig);
+      LOG.info(String.format("Deploying VM: name=%s, config=%s, namespace=%s", vmName, vmConfig, namespace));
     }
 
     String deploymentRequestJson = new Gson().toJson(deploymentRequest);
@@ -140,8 +141,8 @@ public class OrkaClient {
     return response;
   }
 
-  public DeploymentResponse deployVM(String vmConfig, String namespace) throws IOException {
-    return deployVM(vmConfig, namespace, null);
+  public DeploymentResponse deployVM(String vmName, String vmConfig, String namespace) throws IOException {
+    return deployVM(vmName, vmConfig, namespace, null);
   }
 
   public DeletionResponse deleteVM(String vmName, String namespace) throws IOException {

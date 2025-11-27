@@ -11,6 +11,7 @@ import com.macstadium.orka.client.TokenProvider;
 import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -287,7 +288,10 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         vmMetadata = null;
       }
 
-      DeploymentResponse response = this.deployVM(image.getName(), image.getNamespace(), vmMetadata);
+      // Generate custom VM name based on project metadata
+      String vmName = generateVmName(vmMetadata);
+
+      DeploymentResponse response = this.deployVM(vmName, image.getName(), image.getNamespace(), vmMetadata);
       if (!response.isSuccessful()) {
         LOG.warn(String.format("VM deployment failed: %s", response.getMessage()));
         image.terminateInstance(instance.getInstanceId());
@@ -356,8 +360,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     }
   }
 
-  private DeploymentResponse deployVM(String vmName, String namespace, String vmMetadata) throws IOException {
-    return this.orkaClient.deployVM(vmName, namespace, vmMetadata);
+  private DeploymentResponse deployVM(String vmName, String vmConfig, String namespace, String vmMetadata)
+      throws IOException {
+    return this.orkaClient.deployVM(vmName, vmConfig, namespace, vmMetadata);
   }
 
   DeletionResponse deleteVM(String vmId, String namespace) throws IOException {
@@ -510,5 +515,68 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     // Keys: alphanumeric, underscore, hyphen
     // Values: anything except comma and equals
     return metadata.matches(CommonConstants.VM_METADATA_VALIDATION_PATTERN);
+  }
+
+  /**
+   * Generates VM name in format: {project}-tc-{random} or vm-tc-{random} if no
+   * project.
+   */
+  private String generateVmName(String vmMetadata) {
+    String project = extractProjectFromMetadata(vmMetadata);
+    String suffix = generateRandomSuffix(5);
+
+    String vmName;
+    if (StringUtil.isNotEmpty(project)) {
+      // Sanitize project name: lowercase, replace invalid chars with hyphen
+      String sanitizedProject = project.toLowerCase()
+          .replaceAll("[^a-z0-9-]", "-") // Replace invalid chars with hyphen
+          .replaceAll("-+", "-") // Collapse multiple hyphens
+          .replaceAll("^-|-$", ""); // Remove leading/trailing hyphens
+
+      // Limit project part to keep total name <= 63 chars (k8s limit)
+      // Format: {project}-tc-{suffix} where suffix is 5 chars
+      int maxProjectLen = 63 - 4 - 5; // 54 chars for project
+      if (sanitizedProject.length() > maxProjectLen) {
+        sanitizedProject = sanitizedProject.substring(0, maxProjectLen);
+      }
+
+      vmName = sanitizedProject + "-tc-" + suffix;
+    } else {
+      vmName = "vm-tc-" + suffix;
+    }
+
+    LOG.debug(String.format("Generated VM name: %s (from project: %s)", vmName, project));
+    return vmName;
+  }
+
+  /**
+   * Extracts target_project value from metadata string.
+   */
+  private String extractProjectFromMetadata(String vmMetadata) {
+    if (StringUtil.isEmpty(vmMetadata)) {
+      return null;
+    }
+
+    String[] pairs = vmMetadata.split(",");
+    for (String pair : pairs) {
+      String[] keyValue = pair.trim().split("=", 2);
+      if (keyValue.length == 2 && "target_project".equalsIgnoreCase(keyValue[0].trim())) {
+        return keyValue[1].trim();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Generates random alphanumeric suffix.
+   */
+  private String generateRandomSuffix(int length) {
+    String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    SecureRandom random = new SecureRandom();
+    StringBuilder sb = new StringBuilder(length);
+    for (int i = 0; i < length; i++) {
+      sb.append(chars.charAt(random.nextInt(chars.length())));
+    }
+    return sb.toString();
   }
 }
