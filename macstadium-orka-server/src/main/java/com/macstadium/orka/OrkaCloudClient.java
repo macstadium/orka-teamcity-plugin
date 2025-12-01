@@ -52,6 +52,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
   private final String agentDirectory;
   private final String serverUrl;
+  private final String profileId;
   private OrkaClient orkaClient;
   private final ScheduledExecutorService scheduledExecutorService;
   private ScheduledFuture<?> removedFailedInstancesScheduledTask;
@@ -61,7 +62,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   private Map<String, String> nodeMappings;
 
   public OrkaCloudClient(@NotNull final CloudClientParameters params, ExecutorServices executorServices,
-      @Nullable final String unusedWebLinksServerUrl) {
+      @NotNull final String profileId) {
+    this.profileId = profileId;
     this.initializeOrkaClient(params);
     this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
     // Read serverUrl from Cloud Profile parameters (user-configured)
@@ -74,6 +76,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
       LOG.debug("Server URL not configured - agent will use serverUrl from VM image");
     }
 
+    LOG.info(String.format("Initializing OrkaCloudClient for profile: %s", profileId));
     this.images.add(this.createImage(params));
     this.scheduledExecutorService = executorServices.getNormalExecutorService();
     this.remoteAgent = new RemoteAgent();
@@ -86,6 +89,14 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   @Used("Tests")
   public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
       ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil) {
+    this(params, client, scheduledExecutorService, remoteAgent, sshUtil, "test-profile");
+  }
+
+  @Used("Tests")
+  public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
+      ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil,
+      String profileId) {
+    this.profileId = profileId;
     this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
     // For test constructor, serverUrl will be null (buildAgent.properties update
     // will be skipped)
@@ -164,8 +175,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     int limit = StringUtil.isEmpty(instanceLimit) ? OrkaConstants.UNLIMITED_INSTANCES
         : Integer.parseInt(instanceLimit);
 
-    LOG.debug(String.format("createImage: vm='%s', namespace='%s', poolId='%s', limit=%s",
-        vm, namespace, agentPoolId, instanceLimit));
+    LOG.debug(String.format("createImage: vm='%s', namespace='%s', poolId='%s', limit=%s, profileId='%s'",
+        vm, namespace, agentPoolId, instanceLimit, this.profileId));
 
     // Validate required parameters
     if (StringUtil.isEmpty(vm)) {
@@ -181,7 +192,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
       throw new IllegalArgumentException("VM Password must be specified");
     }
 
-    return new OrkaCloudImage(vm, namespace, vmUser, vmPassword, agentPoolId, limit, vmMetadata);
+    return new OrkaCloudImage(this.profileId, vm, namespace, vmUser, vmPassword, agentPoolId, limit, vmMetadata);
   }
 
   public boolean isInitialized() {
@@ -222,7 +233,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   @Nullable
   private OrkaCloudInstance createInstanceFromExistingAgent(OrkaCloudImage image, String instanceId) {
     try {
-      LOG.debug(String.format("createInstanceFromExistingAgent searching for vm: %s.", image.getName()));
+      LOG.debug(String.format("createInstanceFromExistingAgent searching for vm: %s.", image.getVmConfigName()));
 
       VMResponse vmResponse = this.getVM(instanceId, image.getNamespace());
       if (vmResponse != null && vmResponse.isSuccessful()) {
@@ -279,8 +290,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
   private void setUpVM(OrkaCloudImage image, OrkaCloudInstance instance, @NotNull final CloudInstanceUserData data) {
     try {
-      LOG.debug(String.format("Setting up VM for image '%s' (namespace: %s)",
-          image.getName(), image.getNamespace()));
+      LOG.debug(String.format("Setting up VM for image '%s' (vmConfig: %s, namespace: %s)",
+          image.getName(), image.getVmConfigName(), image.getNamespace()));
 
       String vmMetadata = image.getVmMetadata();
       if (StringUtil.isNotEmpty(vmMetadata) && !isValidMetadataFormat(vmMetadata)) {
@@ -291,7 +302,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
       // Generate custom VM name based on project metadata
       String vmName = generateVmName(vmMetadata);
 
-      DeploymentResponse response = this.deployVM(vmName, image.getName(), image.getNamespace(), vmMetadata);
+      // Use getVmConfigName() for Orka API (not getName() which includes profileId)
+      DeploymentResponse response = this.deployVM(vmName, image.getVmConfigName(), image.getNamespace(), vmMetadata);
       if (!response.isSuccessful()) {
         LOG.warn(String.format("VM deployment failed: %s", response.getMessage()));
         image.terminateInstance(instance.getInstanceId());

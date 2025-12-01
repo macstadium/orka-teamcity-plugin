@@ -18,8 +18,15 @@ import org.jetbrains.annotations.Nullable;
 
 public class OrkaCloudImage implements CloudImage {
     private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
+    private static final String IMAGE_ID_SEPARATOR = "_";
+    private static final String DISPLAY_NAME_FORMAT = "%s (%s)"; // profileId (vmConfig)
+
     @NotNull
     private final String id;
+    @NotNull
+    private final String displayName;
+    @NotNull
+    private final String vmConfigName;
     @NotNull
     private final String user;
     @NotNull
@@ -33,10 +40,21 @@ public class OrkaCloudImage implements CloudImage {
     @NotNull
     private final Map<String, OrkaCloudInstance> instances = new ConcurrentHashMap<String, OrkaCloudInstance>();
 
-    public OrkaCloudImage(@NotNull final String imageId, @NotNull final String namespace, @NotNull final String user,
+    /**
+     * Creates OrkaCloudImage with unique ID based on profileId and vmConfigName.
+     * Image ID format: {profileId}_{vmConfigName}
+     * Display name format: {profileId} ({vmConfigName})
+     * This ensures uniqueness when multiple Cloud Profiles use the same VM Config.
+     */
+    public OrkaCloudImage(@NotNull final String profileId, @NotNull final String vmConfigName,
+            @NotNull final String namespace, @NotNull final String user,
             @NotNull final String password,
             @Nullable final String agentPoolId, int instanceLimit, @Nullable final String vmMetadata) {
-        this.id = imageId;
+        // Create unique image ID by combining profileId and vmConfigName
+        this.id = profileId + IMAGE_ID_SEPARATOR + vmConfigName;
+        // Display name: "profileId (vmConfig)"
+        this.displayName = String.format(DISPLAY_NAME_FORMAT, profileId, vmConfigName);
+        this.vmConfigName = vmConfigName;
         this.namespace = namespace;
         this.user = user;
         this.password = password;
@@ -44,6 +62,9 @@ public class OrkaCloudImage implements CloudImage {
         this.agentPoolId = (agentPoolId != null && !agentPoolId.isEmpty()) ? Integer.parseInt(agentPoolId) : 0;
         this.instanceLimit = instanceLimit;
         this.vmMetadata = vmMetadata;
+
+        LOG.info(String.format("Created OrkaCloudImage: id='%s', name='%s' (profileId='%s', vmConfig='%s')",
+                this.id, this.displayName, profileId, vmConfigName));
     }
 
     @NotNull
@@ -51,9 +72,21 @@ public class OrkaCloudImage implements CloudImage {
         return this.id;
     }
 
+    /**
+     * Returns the display name for UI in EC2 style: "vmConfig (profileId)".
+     * This distinguishes between multiple Cloud Profiles using the same VM Config.
+     */
     @NotNull
     public String getName() {
-        return this.id;
+        return this.displayName;
+    }
+
+    /**
+     * Returns the VM Config name used in Orka API calls.
+     */
+    @NotNull
+    public String getVmConfigName() {
+        return this.vmConfigName;
     }
 
     @NotNull
