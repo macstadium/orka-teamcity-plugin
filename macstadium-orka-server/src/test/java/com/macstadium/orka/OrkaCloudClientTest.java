@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.macstadium.orka.client.CapacityInfo;
 import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.HttpResponse;
@@ -295,6 +296,9 @@ public class OrkaCloudClientTest {
     VMResponse vmResponse = new VMResponse(instanceId, sshPort, host, null);
     vmResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
     when(orkaClient.getVM(any(), any())).thenReturn(vmResponse);
+    // Mock checkCapacity to return success by default
+    CapacityInfo capacityInfo = new CapacityInfo(24, 128000, 5, 5, true, "Capacity available");
+    when(orkaClient.checkCapacity(any(), any())).thenReturn(capacityInfo);
     return orkaClient;
   }
 

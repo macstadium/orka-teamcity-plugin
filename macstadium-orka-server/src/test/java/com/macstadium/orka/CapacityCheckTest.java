@@ -7,8 +7,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import com.macstadium.orka.client.DeploymentResponse;
+import com.macstadium.orka.client.CapacityInfo;
 import com.macstadium.orka.client.DeletionResponse;
+import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.HttpResponse;
 import com.macstadium.orka.client.OrkaClient;
 import com.macstadium.orka.client.VMResponse;
@@ -122,6 +123,10 @@ public class CapacityCheckTest {
         DeletionResponse deletionResponse = new DeletionResponse("Success");
         deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
         when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);
+
+        // Mock checkCapacity to return success by default
+        CapacityInfo capacityInfo = new CapacityInfo(24, 128000, 5, 5, true, "Capacity available");
+        when(orkaClient.checkCapacity(any(), any())).thenReturn(capacityInfo);
         
         VMResponse vmResponse = new VMResponse(instanceId, sshPort, host, null);
         vmResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));

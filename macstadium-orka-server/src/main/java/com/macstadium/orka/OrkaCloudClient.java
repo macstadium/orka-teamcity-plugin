@@ -3,6 +3,7 @@ package com.macstadium.orka;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.util.text.StringUtil;
 import com.macstadium.orka.client.AwsEksTokenProvider;
+import com.macstadium.orka.client.CapacityInfo;
 import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.OrkaClient;
@@ -46,6 +47,10 @@ import org.jetbrains.annotations.Nullable;
 
 public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx {
   private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
+  
+  // Capacity check cache settings
+  private static final long CAPACITY_CACHE_TTL_MS = 30_000; // 30 seconds
+  private static final long CAPACITY_FAILURE_BACKOFF_MS = 30_000; // 30 seconds backoff after failure
 
   @NotNull
   private final List<OrkaCloudImage> images = new ArrayList<OrkaCloudImage>();
@@ -60,6 +65,11 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   private final RemoteAgent remoteAgent;
   private final SSHUtil sshUtil;
   private Map<String, String> nodeMappings;
+  
+  // Capacity check cache
+  private volatile CapacityInfo cachedCapacityInfo;
+  private volatile long lastCapacityCheckTime;
+  private volatile long lastCapacityFailureTime;
 
   public OrkaCloudClient(@NotNull final CloudClientParameters params, ExecutorServices executorServices,
       @NotNull final String profileId) {
@@ -76,7 +86,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
       LOG.debug("Server URL not configured - agent will use serverUrl from VM image");
     }
 
-    LOG.info(String.format("Initializing OrkaCloudClient for profile: %s", profileId));
+    LOG.info(String.format("[%s] Initializing OrkaCloudClient", profileId));
     this.images.add(this.createImage(params));
     this.scheduledExecutorService = executorServices.getNormalExecutorService();
     this.remoteAgent = new RemoteAgent();
@@ -265,7 +275,62 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   }
 
   public boolean canStartNewInstance(@NotNull final CloudImage image) {
-    return ((OrkaCloudImage) image).canStartNewInstance();
+    OrkaCloudImage orkaImage = (OrkaCloudImage) image;
+    long now = System.currentTimeMillis();
+    
+    // First check TeamCity instance limit
+    if (!orkaImage.canStartNewInstance()) {
+      LOG.debug(String.format("[%s] canStartNewInstance: FALSE - instance limit reached", this.profileId));
+      return false;
+    }
+    
+    // Check if we're in backoff period after capacity failure
+    if (lastCapacityFailureTime > 0) {
+      long timeSinceFailure = now - lastCapacityFailureTime;
+      if (timeSinceFailure < CAPACITY_FAILURE_BACKOFF_MS) {
+        // Don't log every poll - too noisy
+        return false;
+      }
+    }
+    
+    // Check cached capacity (if cache is still valid)
+    if (cachedCapacityInfo != null) {
+      long cacheAge = now - lastCapacityCheckTime;
+      if (cacheAge < CAPACITY_CACHE_TTL_MS) {
+        return cachedCapacityInfo.hasCapacity();
+      }
+    }
+    
+    // No valid cache - return true and let setUpVM handle the actual check
+    return true;
+  }
+  
+  /**
+   * Updates capacity cache. Called after capacity check in setUpVM.
+   */
+  private void updateCapacityCache(CapacityInfo capacityInfo) {
+    this.cachedCapacityInfo = capacityInfo;
+    this.lastCapacityCheckTime = System.currentTimeMillis();
+    
+    if (!capacityInfo.hasCapacity()) {
+      this.lastCapacityFailureTime = System.currentTimeMillis();
+    }
+  }
+  
+  /**
+   * Invalidates capacity cache. Called after successful deploy/terminate (resources changed).
+   */
+  private void invalidateCapacityCache() {
+    this.cachedCapacityInfo = null;
+    this.lastCapacityCheckTime = 0;
+  }
+  
+  /**
+   * Clears capacity failure backoff and cache. Called when VM is terminated (resources freed).
+   */
+  private void clearCapacityBackoff() {
+    this.lastCapacityFailureTime = 0;
+    this.invalidateCapacityCache();
   }
 
   @Nullable
@@ -281,7 +346,6 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     String instanceId = UUID.randomUUID().toString();
     OrkaCloudImage cloudImage = (OrkaCloudImage) image;
     OrkaCloudInstance instance = cloudImage.startNewInstance(instanceId);
-    LOG.debug(String.format("startNewInstance with temp id: %s", instanceId));
 
     this.scheduledExecutorService.submit(() -> this.setUpVM(cloudImage, instance, data));
 
@@ -290,34 +354,54 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
   private void setUpVM(OrkaCloudImage image, OrkaCloudInstance instance, @NotNull final CloudInstanceUserData data) {
     try {
-      LOG.debug(String.format("Setting up VM for image '%s' (vmConfig: %s, namespace: %s)",
-          image.getName(), image.getVmConfigName(), image.getNamespace()));
+      // Check capacity before deployment
+      CapacityInfo capacityInfo = this.checkCapacity(image.getVmConfigName(), image.getNamespace());
+      this.updateCapacityCache(capacityInfo);
+      
+      if (!capacityInfo.hasCapacity()) {
+        LOG.warn(String.format("[%s] No capacity for '%s' (backoff %.0fs): %s", 
+            this.profileId, image.getVmConfigName(), 
+            CAPACITY_FAILURE_BACKOFF_MS / 1000.0, capacityInfo.getMessage()));
+        instance.setStatus(InstanceStatus.ERROR);
+        instance.setErrorInfo(new CloudErrorInfo("No capacity available", capacityInfo.getMessage()));
+        image.terminateInstance(instance.getInstanceId());
+        return;
+      }
+      
+      LOG.info(String.format("[%s] Capacity OK for '%s': %s", 
+          this.profileId, image.getVmConfigName(), capacityInfo.getMessage()));
 
       String vmMetadata = image.getVmMetadata();
       if (StringUtil.isNotEmpty(vmMetadata) && !isValidMetadataFormat(vmMetadata)) {
-        LOG.warn(String.format("Invalid VM metadata format: %s. Expected: key1=value1,key2=value2", vmMetadata));
+        LOG.warn(String.format("[%s] Invalid VM metadata format: %s. Expected: key1=value1,key2=value2",
+            this.profileId, vmMetadata));
         vmMetadata = null;
       }
 
       // Generate custom VM name based on project metadata
       String vmName = generateVmName(vmMetadata);
 
-      // Use getVmConfigName() for Orka API (not getName() which includes profileId)
+      LOG.info(String.format("[%s] Deploying VM: name=%s, config=%s", 
+          this.profileId, vmName, image.getVmConfigName()));
       DeploymentResponse response = this.deployVM(vmName, image.getVmConfigName(), image.getNamespace(), vmMetadata);
       if (!response.isSuccessful()) {
-        LOG.warn(String.format("VM deployment failed: %s", response.getMessage()));
+        LOG.warn(String.format("[%s] VM deployment failed: %s", this.profileId, response.getMessage()));
         image.terminateInstance(instance.getInstanceId());
         return;
       }
 
       String instanceId = response.getName();
-      LOG.info(
-          String.format("VM deployed: %s (IP: %s, SSH port: %d)", instanceId, response.getIP(), response.getSSH()));
+      LOG.info(String.format("[%s] VM deployed: %s (IP: %s, SSH port: %d)", 
+          this.profileId, instanceId, response.getIP(), response.getSSH()));
+      
+      // Invalidate cache after successful deployment (resources changed)
+      this.invalidateCapacityCache();
 
       // Verify VM exists in Orka
       VMResponse vmStatus = this.getVM(instanceId, image.getNamespace());
       if (!vmStatus.isSuccessful()) {
-        LOG.warn(String.format("VM %s not found in Orka after deployment: %s", instanceId, vmStatus.getMessage()));
+        LOG.warn(String.format("[%s] VM %s not found in Orka after deployment: %s",
+            this.profileId, instanceId, vmStatus.getMessage()));
         image.terminateInstance(instance.getInstanceId());
         return;
       }
@@ -349,13 +433,14 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
           image.getPassword(), this.agentDirectory, data);
 
       instance.setStatus(InstanceStatus.RUNNING);
-      LOG.info(String.format("VM %s setup completed - agent will auto-start", instanceId));
+      LOG.info(String.format("[%s] VM %s setup completed", this.profileId, instanceId));
     } catch (IOException | InterruptedException e) {
-      LOG.warnAndDebugDetails("VM setup failed for " + instance.getInstanceId(), e);
+      LOG.warnAndDebugDetails(String.format("[%s] VM setup failed for %s",
+          this.profileId, instance.getInstanceId()), e);
       instance.setStatus(InstanceStatus.ERROR);
       instance.setErrorInfo(new CloudErrorInfo(e.getMessage(), e.toString(), e));
 
-      LOG.warn(String.format("Terminating failed VM %s after all retries", instance.getInstanceId()));
+      LOG.warn(String.format("[%s] Terminating failed VM %s", this.profileId, instance.getInstanceId()));
       this.terminateNonInitilizedInstance(instance);
     }
   }
@@ -383,6 +468,10 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
   VMResponse getVM(String vmName, String namespace) throws IOException {
     return this.orkaClient.getVM(vmName, namespace);
+  }
+
+  CapacityInfo checkCapacity(String vmConfigName, String namespace) throws IOException {
+    return this.orkaClient.checkCapacity(vmConfigName, namespace);
   }
 
   private void waitForVM(String host, int sshPort) throws InterruptedException, IOException {
@@ -460,7 +549,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     OrkaCloudInstance orkaInstance = (OrkaCloudInstance) instance;
     this.scheduledExecutorService.submit(() -> {
       try {
-        LOG.info(String.format("Terminating VM %s...", instance.getInstanceId()));
+        LOG.info(String.format("[%s] Terminating VM %s...", this.profileId, instance.getInstanceId()));
         OrkaCloudImage image = (OrkaCloudImage) instance.getImage();
 
         orkaInstance.setStatus(InstanceStatus.SCHEDULED_TO_STOP);
@@ -472,13 +561,17 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         if (response.isSuccessful()) {
           orkaInstance.setStatus(InstanceStatus.STOPPED);
           image.terminateInstance(instance.getInstanceId());
-          LOG.info(String.format("VM %s terminated successfully", instance.getInstanceId()));
+          LOG.info(String.format("[%s] VM %s terminated successfully", this.profileId, instance.getInstanceId()));
+          // Clear capacity backoff since resources are now freed
+          this.clearCapacityBackoff();
         } else {
-          LOG.warn(String.format("Failed to delete VM %s: %s", instance.getInstanceId(), response.getMessage()));
+          LOG.warn(String.format("[%s] Failed to delete VM %s: %s",
+              this.profileId, instance.getInstanceId(), response.getMessage()));
           this.setInstanceForDeletion(orkaInstance, new CloudErrorInfo("Error deleting VM", response.getMessage()));
         }
       } catch (IOException e) {
-        LOG.warnAndDebugDetails("VM termination failed for " + instance.getInstanceId(), e);
+        LOG.warnAndDebugDetails(String.format("[%s] VM termination failed for %s",
+            this.profileId, instance.getInstanceId()), e);
         orkaInstance.setStatus(InstanceStatus.ERROR);
         this.setInstanceForDeletion(orkaInstance, new CloudErrorInfo(e.getMessage(), e.toString(), e));
       }
