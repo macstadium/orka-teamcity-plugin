@@ -123,7 +123,7 @@ public class RemoteAgent {
   void updateBuildAgentProperties(SSHClient ssh, String agentDirectory, String instanceId,
       String serverUrl) throws IOException {
     String buildAgentPropertiesPath = String.format(BUILD_AGENT_PROPERTIES_PATH, agentDirectory);
-    String agentName = "orka-mac-" + instanceId;
+    String agentName = "vm-mac-" + instanceId;
 
     // Always update agent name for uniqueness
     // Update serverUrl only if provided

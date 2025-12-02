@@ -86,7 +86,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     this.profileId = profileId;
     // Extract profile name from description (format: "profile 'NAME'{id=ID}")
     String description = params.getProfileDescription();
-    this.profileName = extractProfileName(description, profileId);    
+    this.profileName = extractProfileName(description, profileId);
     this.initializeOrkaClient(params);
     this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
     // Read serverUrl from Cloud Profile parameters (user-configured)
@@ -577,7 +577,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     }
 
     String buildAgentPropertiesPath = String.format("%s/conf/buildAgent.properties", this.agentDirectory);
-    String agentName = "orka-mac-" + instanceId;
+    String agentName = "vm-mac-" + instanceId;
     boolean updateServerUrl = (this.serverUrl != null && !this.serverUrl.trim().isEmpty());
 
     try (net.schmizz.sshj.SSHClient ssh = new net.schmizz.sshj.SSHClient()) {
