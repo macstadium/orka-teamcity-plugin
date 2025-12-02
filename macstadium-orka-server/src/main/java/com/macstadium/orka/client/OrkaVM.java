@@ -2,9 +2,11 @@ package com.macstadium.orka.client;
 
 import com.google.gson.annotations.SerializedName;
 
+import java.util.Map;
+
 /**
  * Represents a running VM in Orka.
- * Used to count VMs per node for capacity checking.
+ * Used for capacity checking and instance recovery.
  */
 public class OrkaVM {
     private String name;
@@ -14,6 +16,10 @@ public class OrkaVM {
     private String memory;
     private String status;
     private String type;
+    private int ssh;
+
+    @SerializedName("customMetadata")
+    private Map<String, String> metadata;
 
     public OrkaVM() {
     }
@@ -53,6 +59,14 @@ public class OrkaVM {
         return type;
     }
 
+    public int getSsh() {
+        return ssh;
+    }
+
+    public Map<String, String> getMetadata() {
+        return metadata;
+    }
+
     public boolean isRunning() {
         return "Running".equalsIgnoreCase(status);
     }
@@ -63,8 +77,8 @@ public class OrkaVM {
 
     @Override
     public String toString() {
-        return String.format("OrkaVM{name='%s', node='%s', status='%s', type='%s'}", 
-            name, node, status, type);
+        return String.format("OrkaVM{name='%s', node='%s', status='%s', ip='%s', ssh=%d}",
+            name, node, status, ip, ssh);
     }
 }
 

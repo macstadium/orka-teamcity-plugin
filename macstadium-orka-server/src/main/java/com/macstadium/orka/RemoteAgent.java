@@ -96,7 +96,10 @@ public class RemoteAgent {
             exitStatus, output));
       }
     } catch (IOException e) {
-      LOG.warn(String.format("Failed to stop agent on VM %s (SSH error)", orkaInstance.getInstanceId()), e);
+      // SSH errors during stop are not critical - VM will be deleted anyway
+      // But log as WARN so we can see if there are connectivity issues
+      LOG.warn(String.format("Could not stop agent on VM %s via SSH: %s (VM will still be deleted)",
+          orkaInstance.getInstanceId(), e.getMessage()));
     }
 
     LOG.debug("stopAgentOnVM completed.");

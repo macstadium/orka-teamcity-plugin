@@ -107,7 +107,8 @@ public class OrkaClient {
    * Checks if there is capacity to deploy a VM with the given config.
    * Takes into account:
    * - Required CPU and memory
-   * - Tag requirements (if tagRequired is true, only nodes with matching tag are considered)
+   * - Tag requirements (if tagRequired is true, only nodes with matching tag are
+   * considered)
    * - Node status (only READY nodes)
    *
    * @param vmConfigName Name of the VM config
@@ -120,7 +121,7 @@ public class OrkaClient {
     // 1. Get VM Config
     OrkaVMConfig vmConfig = this.getVMConfig(vmConfigName, namespace);
     if (vmConfig == null) {
-      return CapacityInfo.checkFailed(String.format("VM config '%s' not found in namespace '%s'",
+      return CapacityInfo.checkFailed(String.format("VM config [%s] not found in namespace [%s]",
           vmConfigName, namespace));
     }
 
@@ -135,8 +136,11 @@ public class OrkaClient {
 
     // 1.5. Get running VMs to check VM count per node (ARM limit: 2 VMs per host)
     java.util.Map<String, Integer> vmCountPerNode = new java.util.HashMap<>();
+    int pendingVMCount = 0;
     try {
-      vmCountPerNode = this.countVMsPerNode(namespace);
+      VMCountResult vmCount = this.countVMsPerNode(namespace);
+      vmCountPerNode = vmCount.getVmCountPerNode();
+      pendingVMCount = vmCount.getPendingCount();
     } catch (Exception e) {
       LOG.warn(String.format("Failed to get VMs list: %s", e.getMessage()));
     }
@@ -168,34 +172,38 @@ public class OrkaClient {
         }
       }
       if (pinnedNode == null) {
-        return CapacityInfo.noCapacity(String.format("Pinned node '%s' not found", pinnedNodeName));
+        return CapacityInfo.noCapacity(String.format("Pinned node [%s] not found", pinnedNodeName));
       }
       if (!pinnedNode.isReady()) {
-        return CapacityInfo.noCapacity(String.format("Pinned node '%s' is not ready (status=%s)",
+        return CapacityInfo.noCapacity(String.format("Pinned node [%s] is not ready, status: %s",
             pinnedNodeName, pinnedNode.getPhase()));
       }
       // Check VM limit on pinned node
-      int vmsOnPinnedNode = vmCountPerNode.getOrDefault(pinnedNodeName, 0);
-      LOG.debug(String.format("Pinned node '%s' has %d VMs (limit: %d)", 
-          pinnedNodeName, vmsOnPinnedNode, MAX_VMS_PER_ARM_NODE));
+      // For pinned nodes, pending VMs will go to this specific node, so count them
+      // too
+      int runningOnPinnedNode = vmCountPerNode.getOrDefault(pinnedNodeName, 0);
+      int vmsOnPinnedNode = runningOnPinnedNode + pendingVMCount;
+      LOG.debug(String.format("Pinned node '%s' has %d running + %d pending VMs (limit: %d)",
+          pinnedNodeName, runningOnPinnedNode, pendingVMCount, MAX_VMS_PER_ARM_NODE));
       if (vmsOnPinnedNode >= MAX_VMS_PER_ARM_NODE) {
-        return CapacityInfo.noCapacity(String.format("Pinned node '%s' has reached VM limit (%d/%d VMs)",
-            pinnedNodeName, vmsOnPinnedNode, MAX_VMS_PER_ARM_NODE));
+        return CapacityInfo.noCapacity(String.format("Pinned node [%s] reached VM limit (%d running + %d pending)",
+            pinnedNodeName, runningOnPinnedNode, pendingVMCount));
       }
       if (pinnedNode.getAvailableCpu() < requiredCpu) {
-        return CapacityInfo.noCapacity(String.format("Pinned node '%s' has not enough CPU (%d available, %d required)",
+        return CapacityInfo.noCapacity(String.format("Pinned node [%s] not enough CPU: %d available, %d required",
             pinnedNodeName, pinnedNode.getAvailableCpu(), requiredCpu));
       }
       float availableMemoryGb = pinnedNode.getAvailableMemoryAsFloat();
       if (availableMemoryGb < requiredMemoryGb) {
-        return CapacityInfo.noCapacity(String.format("Pinned node '%s' has not enough memory (%.1fG available, %.1fG required)",
-            pinnedNodeName, availableMemoryGb, requiredMemoryGb));
+        return CapacityInfo
+            .noCapacity(String.format("Pinned node [%s] not enough memory: %.1fG available, %.1fG required",
+                pinnedNodeName, availableMemoryGb, requiredMemoryGb));
       }
       // Pinned node is OK
       LOG.debug(String.format("Pinned node '%s' has capacity: cpu=%d, memory=%.1fG, vms=%d/%d",
           pinnedNodeName, pinnedNode.getAvailableCpu(), availableMemoryGb, vmsOnPinnedNode, MAX_VMS_PER_ARM_NODE));
       return new CapacityInfo(pinnedNode.getAvailableCpu(), (long) (availableMemoryGb * 1024),
-          allNodes.size(), 1, true, String.format("Pinned node '%s' has capacity", pinnedNodeName));
+          allNodes.size(), 1, true, String.format("Pinned node [%s] has capacity", pinnedNodeName));
     }
 
     // 3. Filter nodes
@@ -229,7 +237,7 @@ public class OrkaClient {
       // Check VM limit (ARM hosts: max 2 VMs)
       int vmsOnNode = vmCountPerNode.getOrDefault(node.getName(), 0);
       if (vmsOnNode >= MAX_VMS_PER_ARM_NODE) {
-        LOG.debug(String.format("Node %s skipped: VM limit reached (%d/%d)", 
+        LOG.debug(String.format("Node %s skipped: VM limit reached (%d/%d)",
             node.getName(), vmsOnNode, MAX_VMS_PER_ARM_NODE));
         continue;
       }
@@ -261,7 +269,7 @@ public class OrkaClient {
     // 4. Build result
     if (eligibleNodes.isEmpty()) {
       String reason = buildNoCapacityReason(allNodes.size(), totalReadyNodes, nodesWithMatchingTag,
-          nodesWithVmSlots, nodesWithEnoughCpu, nodesWithEnoughMemory, 
+          nodesWithVmSlots, nodesWithEnoughCpu, nodesWithEnoughMemory,
           requiredTag, tagRequired, requiredCpu, requiredMemoryGb, MAX_VMS_PER_ARM_NODE);
       return CapacityInfo.noCapacity(reason);
     }
@@ -280,17 +288,17 @@ public class OrkaClient {
   }
 
   private String buildNoCapacityReason(int totalNodes, int readyNodes, int nodesWithTag,
-      int nodesWithVmSlots, int nodesWithCpu, int nodesWithMemory, 
+      int nodesWithVmSlots, int nodesWithCpu, int nodesWithMemory,
       String requiredTag, boolean tagRequired,
       int requiredCpu, float requiredMemoryGb, int maxVmsPerNode) {
     if (readyNodes == 0) {
       return String.format("No ready nodes (total: %d)", totalNodes);
     }
     if (tagRequired && requiredTag != null && nodesWithTag == 0) {
-      return String.format("No nodes with required tag '%s' (ready nodes: %d)", requiredTag, readyNodes);
+      return String.format("No nodes with required tag [%s], ready nodes: %d", requiredTag, readyNodes);
     }
     if (nodesWithVmSlots == 0) {
-      return String.format("All nodes with tag '%s' have reached VM limit (%d VMs per node)", 
+      return String.format("All nodes with tag [%s] reached VM limit (%d per node)",
           requiredTag, maxVmsPerNode);
     }
     if (nodesWithCpu == 0) {
@@ -315,14 +323,18 @@ public class OrkaClient {
     VMResponse response = JsonHelper.fromJson(httpResponse.getBody(), VMResponse.class);
     response.setHttpResponse(httpResponse);
 
-    // Only log successful responses, not authorization errors
+    // Only log successful responses; 404 is expected for terminated VMs
     if (response.isSuccessful() && response.getIP() != null) {
       LOG.debug(String.format("VM %s found: IP=%s, SSH port=%d",
           vmName, response.getIP(), response.getSSH()));
     } else if (!response.isSuccessful()) {
-      LOG.warn(String.format("Failed to get VM %s status: %s (HTTP %d)",
-          vmName, response.getMessage(),
-          httpResponse.getCode()));
+      // 404 is normal for terminated VMs - use DEBUG level
+      if (httpResponse.getCode() == 404) {
+        LOG.debug(String.format("VM %s not found (already terminated)", vmName));
+      } else {
+        LOG.warn(String.format("Failed to get VM %s status: %s (HTTP %d)",
+            vmName, response.getMessage(), httpResponse.getCode()));
+      }
     }
 
     return response;
@@ -334,45 +346,84 @@ public class OrkaClient {
    */
   public VMsResponse getVMs(String namespace) throws IOException {
     String url = String.format("%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH);
-    
+
     HttpResponse httpResponse = this.get(url);
     String body = httpResponse.getBody();
-    
+
     VMsResponse response = JsonHelper.fromJson(body, VMsResponse.class);
     response.setHttpResponse(httpResponse);
-    
+
     if (response.getVMs() != null) {
       LOG.debug(String.format("Fetched %d VMs from namespace '%s'", response.getVMs().size(), namespace));
     }
-    
+
     return response;
   }
-  
+
   /**
-   * Counts running VMs per node.
-   * @return Map of nodeName -> VM count
+   * Result of counting VMs per node.
    */
-  public java.util.Map<String, Integer> countVMsPerNode(String namespace) throws IOException {
+  public static class VMCountResult {
+    private final java.util.Map<String, Integer> vmCountPerNode;
+    private final int pendingCount;
+
+    public VMCountResult(java.util.Map<String, Integer> vmCountPerNode, int pendingCount) {
+      this.vmCountPerNode = vmCountPerNode;
+      this.pendingCount = pendingCount;
+    }
+
+    public java.util.Map<String, Integer> getVmCountPerNode() {
+      return vmCountPerNode;
+    }
+
+    public int getPendingCount() {
+      return pendingCount;
+    }
+
+    public int getTotalRunning() {
+      return vmCountPerNode.values().stream().mapToInt(Integer::intValue).sum();
+    }
+  }
+
+  /**
+   * Counts running VMs per node and pending VMs.
+   * 
+   * @return VMCountResult with node counts and pending count
+   */
+  public VMCountResult countVMsPerNode(String namespace) throws IOException {
     VMsResponse response = this.getVMs(namespace);
     java.util.Map<String, Integer> vmCountPerNode = new java.util.HashMap<>();
-    
-    for (OrkaVM vm : response.getVMs()) {
-      if (vm.isRunning() && vm.getNode() != null) {
-        vmCountPerNode.merge(vm.getNode(), 1, Integer::sum);
+
+    java.util.List<OrkaVM> vms = response.getVMs();
+    int pendingCount = 0;
+    if (vms != null) {
+      LOG.debug(String.format("Found %d VMs in namespace '%s'", vms.size(), namespace));
+      for (OrkaVM vm : vms) {
+        LOG.debug(String.format("VM: name=%s, node=%s, status=%s",
+            vm.getName(), vm.getNode(), vm.getStatus()));
+        if (vm.isRunning() && vm.getNode() != null && !vm.getNode().isEmpty()) {
+          vmCountPerNode.merge(vm.getNode(), 1, Integer::sum);
+        } else if ("Pending".equalsIgnoreCase(vm.getStatus())) {
+          pendingCount++;
+        }
       }
+    } else {
+      LOG.warn("getVMs returned null list");
     }
-    
-    LOG.debug(String.format("VM count per node: %s", vmCountPerNode));
-    return vmCountPerNode;
+
+    int totalRunning = vmCountPerNode.values().stream().mapToInt(Integer::intValue).sum();
+    LOG.info(String.format("VM count: running=%d on %d nodes, pending=%d",
+        totalRunning, vmCountPerNode.size(), pendingCount));
+    return new VMCountResult(vmCountPerNode, pendingCount);
   }
 
   public NodeResponse getNodes(String namespace) throws IOException {
     String url = String.format("%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, NODE_PATH);
     LOG.debug(String.format("Fetching nodes from namespace '%s'", namespace));
-    
+
     HttpResponse httpResponse = this.get(url);
     String body = httpResponse.getBody();
-    
+
     NodeResponse response;
     // Orka 3 API returns array directly, not {"items": [...]}
     if (body != null && body.trim().startsWith("[")) {
@@ -386,11 +437,11 @@ public class OrkaClient {
       response = JsonHelper.fromJson(body, NodeResponse.class);
     }
     response.setHttpResponse(httpResponse);
-    
+
     if (response.getNodes() != null) {
       LOG.debug(String.format("Fetched %d nodes from namespace '%s'", response.getNodes().size(), namespace));
     }
-    
+
     return response;
   }
 
@@ -419,9 +470,27 @@ public class OrkaClient {
     HttpResponse httpResponse = this.post(
         String.format("%s/%s/%s/%s", this.endpoint, RESOURCE_PATH, namespace, VM_PATH), deploymentRequestJson);
 
-    LOG.debug(String.format("API response: %s", httpResponse.getBody()));
+    String body = httpResponse.getBody();
+    LOG.debug(String.format("API response: %s", body));
 
-    DeploymentResponse response = JsonHelper.fromJson(httpResponse.getBody(), DeploymentResponse.class);
+    // Check for non-JSON responses (HTML error pages, plain text errors)
+    if (body == null || body.isEmpty()) {
+      DeploymentResponse errorResponse = new DeploymentResponse(null, 0, null,
+          String.format("Empty response from Orka API (HTTP %d)", httpResponse.getCode()));
+      errorResponse.setHttpResponse(httpResponse);
+      return errorResponse;
+    }
+
+    if (!body.trim().startsWith("{") && !body.trim().startsWith("[")) {
+      // Not JSON - likely an error page
+      String preview = body.length() > 100 ? body.substring(0, 100) + "..." : body;
+      DeploymentResponse errorResponse = new DeploymentResponse(null, 0, null,
+          String.format("Invalid response from Orka API (HTTP %d): %s", httpResponse.getCode(), preview));
+      errorResponse.setHttpResponse(httpResponse);
+      return errorResponse;
+    }
+
+    DeploymentResponse response = JsonHelper.fromJson(body, DeploymentResponse.class);
     response.setHttpResponse(httpResponse);
 
     return response;

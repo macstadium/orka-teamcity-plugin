@@ -1,7 +1,7 @@
 ext {
     def hasVersionNumber = project.hasProperty('versionNumber') && property('versionNumber') ==~ /\d+\.\d+\.\d+.*/
     versionNumber = hasVersionNumber ? property('versionNumber') : 'SNAPSHOT-' + new Date().format('yyyyMMddHHmmss')
-    teamcityVersion = findProperty('teamcityVersion') ?: '2018.1'
+    teamcityVersion = findProperty('teamcityVersion') ?: '2022.04'
     projectIds = ['group': 'com.macstadium.orka', 'version': versionNumber]
 }
 
