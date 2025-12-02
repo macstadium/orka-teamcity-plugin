@@ -16,6 +16,7 @@ import org.testng.annotations.Test;
 @Test
 public class OrkaCloudInstanceTest {
   private static final String TEST_PROFILE_ID = "test-profile";
+  private static final String TEST_PROFILE_NAME = "Test Profile";
 
   public void when_contains_agent_with_correct_values_should_return_true() throws IOException {
     String instanceId = "id";
@@ -47,7 +48,7 @@ public class OrkaCloudInstanceTest {
   }
 
   private OrkaCloudInstance getInstance(String instanceId, String vmConfigName) {
-    OrkaCloudImage image = new OrkaCloudImage(TEST_PROFILE_ID, vmConfigName, "orka-default", "user", "password", "0", 0, null);
+    OrkaCloudImage image = new OrkaCloudImage(TEST_PROFILE_ID, TEST_PROFILE_NAME, vmConfigName, "orka-default", "user", "password", "0", 0, null);
     return new OrkaCloudInstance(image, instanceId, "orka-default");
   }
 

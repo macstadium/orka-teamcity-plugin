@@ -19,7 +19,7 @@ import org.jetbrains.annotations.Nullable;
 public class OrkaCloudImage implements CloudImage {
     private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
     private static final String IMAGE_ID_SEPARATOR = "_";
-    private static final String DISPLAY_NAME_FORMAT = "%s (%s)"; // profileId (vmConfig)
+    private static final String DISPLAY_NAME_FORMAT = "%s (%s)"; // profileName (vmConfig)
 
     @NotNull
     private final String id;
@@ -43,17 +43,18 @@ public class OrkaCloudImage implements CloudImage {
     /**
      * Creates OrkaCloudImage with unique ID based on profileId and vmConfigName.
      * Image ID format: {profileId}_{vmConfigName}
-     * Display name format: {profileId} ({vmConfigName})
+     * Display name format: {profileName} ({vmConfigName})
      * This ensures uniqueness when multiple Cloud Profiles use the same VM Config.
      */
-    public OrkaCloudImage(@NotNull final String profileId, @NotNull final String vmConfigName,
+    public OrkaCloudImage(@NotNull final String profileId, @NotNull final String profileName,
+            @NotNull final String vmConfigName,
             @NotNull final String namespace, @NotNull final String user,
             @NotNull final String password,
             @Nullable final String agentPoolId, int instanceLimit, @Nullable final String vmMetadata) {
         // Create unique image ID by combining profileId and vmConfigName
         this.id = profileId + IMAGE_ID_SEPARATOR + vmConfigName;
-        // Display name: "profileId (vmConfig)"
-        this.displayName = String.format(DISPLAY_NAME_FORMAT, profileId, vmConfigName);
+        // Display name: "profileName (vmConfig)"
+        this.displayName = String.format(DISPLAY_NAME_FORMAT, profileName, vmConfigName);
         this.vmConfigName = vmConfigName;
         this.namespace = namespace;
         this.user = user;
@@ -63,8 +64,8 @@ public class OrkaCloudImage implements CloudImage {
         this.instanceLimit = instanceLimit;
         this.vmMetadata = vmMetadata;
 
-        LOG.info(String.format("Created OrkaCloudImage: id='%s', name='%s' (profileId='%s', vmConfig='%s')",
-                this.id, this.displayName, profileId, vmConfigName));
+        LOG.info(String.format("Created OrkaCloudImage: id='%s', name='%s' (profileId='%s', profileName='%s', vmConfig='%s')",
+                this.id, this.displayName, profileId, profileName, vmConfigName));
     }
 
     @NotNull

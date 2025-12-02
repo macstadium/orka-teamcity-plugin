@@ -16,6 +16,8 @@ import com.macstadium.orka.client.VMResponse;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -55,12 +57,16 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   private static final long CAPACITY_CACHE_TTL_MS = 30_000; // 30 seconds
   private static final long CAPACITY_FAILURE_BACKOFF_MS = 30_000; // 30 seconds backoff after failure
 
+  // Pattern to extract profile name from description: "profile 'NAME'{id=ID}"
+  private static final Pattern PROFILE_NAME_PATTERN = Pattern.compile("profile\\s+'([^']+)'");
+
   @NotNull
   private final List<OrkaCloudImage> images = new ArrayList<OrkaCloudImage>();
 
   private final String agentDirectory;
   private final String serverUrl;
   private final String profileId;
+  private final String profileName;
   private OrkaClient orkaClient;
   private final ScheduledExecutorService scheduledExecutorService;
   private ScheduledFuture<?> removedFailedInstancesScheduledTask;
@@ -78,6 +84,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   public OrkaCloudClient(@NotNull final CloudClientParameters params, ExecutorServices executorServices,
       @NotNull final String profileId) {
     this.profileId = profileId;
+    // Extract profile name from description (format: "profile 'NAME'{id=ID}")
+    String description = params.getProfileDescription();
+    this.profileName = extractProfileName(description, profileId);    
     this.initializeOrkaClient(params);
     this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
     // Read serverUrl from Cloud Profile parameters (user-configured)
@@ -106,14 +115,15 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   @Used("Tests")
   public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
       ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil) {
-    this(params, client, scheduledExecutorService, remoteAgent, sshUtil, "test-profile");
+    this(params, client, scheduledExecutorService, remoteAgent, sshUtil, "test-profile", "Test Profile");
   }
 
   @Used("Tests")
   public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
       ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil,
-      String profileId) {
+      String profileId, String profileName) {
     this.profileId = profileId;
+    this.profileName = profileName;
     this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
     // For test constructor, serverUrl will be null (buildAgent.properties update
     // will be skipped)
@@ -209,7 +219,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
       throw new IllegalArgumentException("VM Password must be specified");
     }
 
-    return new OrkaCloudImage(this.profileId, vm, namespace, vmUser, vmPassword, agentPoolId, limit, vmMetadata);
+    return new OrkaCloudImage(this.profileId, this.profileName, vm, namespace, vmUser, vmPassword, agentPoolId, limit,
+        vmMetadata);
   }
 
   public boolean isInitialized() {
@@ -838,5 +849,21 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
       sb.append(chars.charAt(random.nextInt(chars.length())));
     }
     return sb.toString();
+  }
+
+  /**
+   * Extracts profile name from TeamCity's profile description format.
+   * Input format: "profile 'NAME'{id=ID}"
+   * Returns: "NAME" or fallback if parsing fails
+   */
+  private static String extractProfileName(String description, String fallback) {
+    if (StringUtil.isEmpty(description)) {
+      return fallback;
+    }
+    Matcher matcher = PROFILE_NAME_PATTERN.matcher(description);
+    if (matcher.find()) {
+      return matcher.group(1);
+    }
+    return fallback;
   }
 }
