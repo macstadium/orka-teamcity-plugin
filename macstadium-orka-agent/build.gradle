@@ -5,7 +5,6 @@ teamcity {
     version = teamcityVersion
     agent {
         descriptor = project.file("teamcity-plugin.xml")
-        archiveName = "agent-plugin.zip"
     }
 }
 dependencies {

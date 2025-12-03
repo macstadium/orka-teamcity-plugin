@@ -7,7 +7,6 @@ teamcity {
     server {
         descriptor = project.file("teamcity-plugin.xml")
         tokens = [Version: project.version]
-        archiveName = "orka-macstadium.zip"
         publish {
             channels = ['Stable']
             token = findProperty('jetbrains.token')
