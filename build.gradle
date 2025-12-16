@@ -11,11 +11,6 @@ allprojects {
     group = projectIds.group
     version = projectIds.version
     
-    repositories {
-        mavenCentral()
-        maven { url "https://download.jetbrains.com/teamcity-repository" }
-        maven { url "https://cache-redirector.jetbrains.com/intellij-dependencies" }
-    }
 }
 
 subprojects {
