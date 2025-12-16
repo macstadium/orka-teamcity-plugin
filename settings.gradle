@@ -1,4 +1,3 @@
-
 rootProject.name = 'macstadium-orka'
 include(':macstadium-orka-server')
 include(':macstadium-orka-agent')
