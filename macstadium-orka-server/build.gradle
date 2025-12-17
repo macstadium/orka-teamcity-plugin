@@ -1,36 +1,30 @@
 plugins {
-    id "com.github.rodm.teamcity-server" version "1.2.2"
-    id "com.github.rodm.teamcity-environments" version "1.2.2"
+    id "io.github.rodm.teamcity-server" version "1.5.2"
+    id "io.github.rodm.teamcity-environments" version "1.5.2"
 }
-
 teamcity {
     version = teamcityVersion
-
     server {
         descriptor = project.file("teamcity-plugin.xml")
         tokens = [Version: project.version]
-
         publish {
             channels = ['Stable']
             token = findProperty('jetbrains.token')
         }
     }
-
     environments {
-        teamcity20181 {
+        teamcity202311 {
             version = "$teamcityVersion"
         }
     }
 }
-
 dependencies {
     agent project(path: ':macstadium-orka-agent', configuration: 'plugin')
     server project(':macstadium-orka-common')
     provided project(":macstadium-orka-common")
-
-    compile "com.squareup.okhttp3:okhttp:3.14.2"
-    compile "com.google.code.gson:gson:2.8.5"
-    compile("com.hierynomus:sshj:0.27.0") {
+    implementation "com.squareup.okhttp3:okhttp:3.14.2"
+    implementation "com.google.code.gson:gson:2.8.5"
+    implementation("com.hierynomus:sshj:0.27.0") {
         exclude group: "org.slf4j"
     }
     provided "org.jetbrains.teamcity:server-api:$teamcityVersion"
@@ -38,9 +32,11 @@ dependencies {
     provided "org.jetbrains.teamcity:cloud-interface:$teamcityVersion"
     provided "org.jetbrains.teamcity:cloud-shared:$teamcityVersion"
     provided "org.jetbrains.teamcity.internal:server:$teamcityVersion"
-    testCompile "org.jetbrains.teamcity:tests-support:$teamcityVersion"
-    testCompile "org.mockito:mockito-core:2.10.0"
+    testImplementation "org.jetbrains.teamcity:tests-support:$teamcityVersion"
+    testImplementation "org.mockito:mockito-core:5.8.0"
 }
 
-serverPlugin.version = null
-serverPlugin.baseName = 'orka-macstadium'
+tasks.named('serverPlugin') {
+    archiveVersion.set('')
+    archiveBaseName.set('orka-macstadium')
+}

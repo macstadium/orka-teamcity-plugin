@@ -2,13 +2,25 @@
 
 This readme provides information about how to build, package, or run the plugin locally. For usage information, see the TeamCity plugin [tutorial][tutorial].
 
-The plugin provides TeamCity cloud integration with Orka by MacStadium. This allows users to to configure TeamCity, so it can provision and tear down agents running in Orka on demand.  
+The plugin provides TeamCity cloud integration with Orka by MacStadium. This allows users to configure TeamCity, so it can provision and tear down agents running in Orka on demand.  
 
 The plugin uses [gradle plugin][gradle-plugin] to build and package the plugin. For more information, see the gradle plugin [page][gradle-plugin].
 
 ## Build requirements
 
-- JDK 8
+- JDK 11 or later (JDK 11, 17, or 21 recommended)
+- Gradle 8.5 (included via wrapper)
+
+### Recent Updates (2025)
+
+This plugin has been upgraded to modern tooling:
+
+- **Gradle**: 5.6.3 → 8.5
+- **TeamCity**: 2018.1 → 2023.11
+- **TeamCity Gradle Plugin**: 1.2.2 → 1.5.2 (now using `io.github.rodm` plugin IDs)
+- **Java Support**: Now supports Java 11, 17, and 21
+- **Test Framework**: Updated Mockito to 5.8.0 for modern Java compatibility
+- **Checkstyle**: Updated to 10.12.5 with simplified Google Java Style configuration
 
 ## Building, packaging and testing the plugin
 
@@ -16,34 +28,62 @@ To build the plugin, run:
 
     ./gradlew build
 
-This runs [checkstyle][checkstyle] validation and builds the plugin. The output is in `macstadium-orka-server/build/distributuons/`.
+This builds the plugin, runs checkstyle validation, and runs all tests. The output is in `macstadium-orka-server/build/distributions/`.
 
-To run tests, run:
+To run tests only:
 
     ./gradlew test
 
-To run checkstyle, run:
+To run checkstyle only:
 
     ./gradlew check
 
-## Running the plugin locally
+### Running the plugin locally
 
-To use the plugin locally, run:
+#### First-time setup
 
-    ./gradlew installteamcity20181
+To download and install a TeamCity server locally, run:
 
-This installs a TeamCity server locally.
+    ./gradlew macstadium-orka-server:downloadTeamcity202311
+    ./gradlew macstadium-orka-server:installTeamcity202311
 
-To start the server, run:
+#### Starting the server
 
-    ./gradlew startteamcity20181
+To start the TeamCity server with the plugin installed, run:
 
-This boots a TeamCity server, packages the plugin and installs it. To run the TeamCity server open http://localhost:8111.
+    ./gradlew macstadium-orka-server:startTeamcity202311Server
+
+Or start it directly:
+
+    cd macstadium-orka-server/servers/TeamCity-2023.11
+    ./bin/teamcity-server.sh start
+
+The TeamCity server will be available at <http://localhost:8111>
+
+#### Stopping the server
 
 To stop the server, run:
 
-    ./gradlew stopteamcity20181
+    ./gradlew macstadium-orka-server:stopTeamcity202311Server
 
-[checkstyle]: http://checkstyle.sourceforge.net/
+Or stop it directly:
+
+    cd macstadium-orka-server/servers/TeamCity-2023.11
+    ./bin/teamcity-server.sh stop
+
+### Setting Java Version
+
+If you have multiple Java versions installed, ensure you're using Java 11 or later:
+
+    export JAVA_HOME=$(/usr/libexec/java_home -v 11)
+    java -version
+
+### Troubleshooting
+
+- **Build fails with Java version errors**: Ensure `JAVA_HOME` is set to Java 11 or later
+- **TeamCity won't start**: Check that port 8111 is not already in use: `lsof -i :8111`
+- **Tests fail with Mockito errors**: Ensure you're using Java 11+ (Mockito 5.x requires Java 11+)
+- **Checkstyle warnings**: Checkstyle is configured with `ignoreFailures = true`, so warnings won't fail the build
+
 [tutorial]: https://plugins.jetbrains.com/docs/teamcity/developing-teamcity-plugins.html
 [gradle-plugin]: https://github.com/rodm/gradle-teamcity-plugin

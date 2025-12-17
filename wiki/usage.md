@@ -4,7 +4,9 @@ This guide explains how to use the Orka TeamCity plugin.
 
 The plugin allows you to configure TeamCity, so it can spin up on demand ephemeral agents that run in an Orka environment.
 
-How to set up the plugin, see [here](setup.md).
+**Compatibility:** This plugin requires TeamCity 2023.11 or later and Java 11, 17, or 21.
+
+For more information on how to set up the plugin, see [here](setup.md).
 
 ## Configure the MacStadium Orka plugin
 
@@ -34,6 +36,6 @@ In your TeamCity server:
 
 Once the cloud profile is successfully configured, TeamCity will automatically spin up and destroy agents in the respective orka environment.
 
-[ip-plan]: https://orkadocs.macstadium.com/docs/orka-glossary#section-ip-plan
-[cli-create-user]: https://orkadocs.macstadium.com/docs/quick-start#section--setting-up-a-user-
+[ip-plan]: https://support.macstadium.com/hc/en-us/articles/28230867289883-IP-Plan
+[cli-create-user]: https://support.macstadium.com/hc/en-us/articles/42515342171931-Authentication-and-User-Management
 [rest-create-user]: https://documenter.getpostman.com/view/6574930/S1ETRGzt?version=latest#55dcdc47-c542-4e85-88f4-e5b2c1734d50
