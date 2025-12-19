@@ -283,37 +283,37 @@ public class OrkaCloudClientTest {
     return mock;
   }
 
-  private OrkaClient getOrkaClientMock(String host, int sshPort, String instanceId) throws IOException {
-    OrkaClient orkaClient = mock(OrkaClient.class);
-    DeploymentResponse deploymentResponse = new DeploymentResponse(host, sshPort, instanceId,
-        null);
-    deploymentResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
-    when(orkaClient.deployVM(any(), any(), any())).thenReturn(deploymentResponse);
-    when(orkaClient.deployVM(any(), any(), any(), any())).thenReturn(deploymentResponse);
-    DeletionResponse deletionResponse = new DeletionResponse("Success");
-    deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
-    when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);
-    VMResponse vmResponse = new VMResponse(instanceId, sshPort, host, null);
-    vmResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
-    when(orkaClient.getVM(any(), any())).thenReturn(vmResponse);
-    // Mock checkCapacity to return success by default
-    CapacityInfo capacityInfo = new CapacityInfo(24, 128000, 5, 5, true, "Capacity available");
-    when(orkaClient.checkCapacity(any(), any())).thenReturn(capacityInfo);
-    return orkaClient;
-  }
+    private OrkaClient getOrkaClientMock(String host, int sshPort, String instanceId) throws IOException {
+        OrkaClient orkaClient = mock(OrkaClient.class);
+        DeploymentResponse deploymentResponse = new DeploymentResponse(host, sshPort, instanceId,
+                null);
+        deploymentResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.deployVM(any(), any(), any())).thenReturn(deploymentResponse);
+        when(orkaClient.deployVM(any(), any(), any(), any())).thenReturn(deploymentResponse);
+        DeletionResponse deletionResponse = new DeletionResponse("Success");
+        deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);
+        VMResponse vmResponse = new VMResponse(instanceId, sshPort, host, null);
+        vmResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.getVM(any(), any())).thenReturn(vmResponse);
+        // Mock checkCapacity to return success by default
+        CapacityInfo capacityInfo = new CapacityInfo(24, 128000, 5, 5, true, "Capacity available");
+        when(orkaClient.checkCapacity(any(), any())).thenReturn(capacityInfo);
+        return orkaClient;
+    }
 
-  private ScheduledExecutorService getScheduledExecutorService() {
-    ScheduledExecutorService scheduledExecutorService = mock(ScheduledExecutorService.class);
-    when(scheduledExecutorService.submit(any(Runnable.class))).thenAnswer(new Answer<Future<?>>() {
-      @Override
-      public Future<?> answer(InvocationOnMock invocation) throws Throwable {
-        Object[] args = invocation.getArguments();
-        Runnable r = (Runnable) args[0];
-        r.run();
-        return CompletableFuture.completedFuture(null);
-      }
-    });
+    private ScheduledExecutorService getScheduledExecutorService() {
+        ScheduledExecutorService scheduledExecutorService = mock(ScheduledExecutorService.class);
+        when(scheduledExecutorService.submit(any(Runnable.class))).thenAnswer(new Answer<Future<?>>() {
+            @Override
+            public Future<?> answer(InvocationOnMock invocation) throws Throwable {
+                Object[] args = invocation.getArguments();
+                Runnable r = (Runnable) args[0];
+                r.run();
+                return CompletableFuture.completedFuture(null);
+            }
+        });
 
-    return scheduledExecutorService;
-  }
+        return scheduledExecutorService;
+    }
 }

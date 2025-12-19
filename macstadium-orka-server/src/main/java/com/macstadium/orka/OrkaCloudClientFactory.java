@@ -77,6 +77,6 @@ public class OrkaCloudClientFactory implements CloudClientFactory {
       @NotNull final CloudClientParameters params) {
     String profileId = state.getProfileId();
     LOG.debug(String.format("Creating new OrkaCloudClient for profile: %s", profileId));
-    return new OrkaCloudClient(params, executorServices, profileId);
+    return new OrkaCloudClient(params, executorServices, profileId, state);
   }
 }

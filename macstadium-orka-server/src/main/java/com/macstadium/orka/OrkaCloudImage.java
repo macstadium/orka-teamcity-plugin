@@ -2,8 +2,10 @@ package com.macstadium.orka;
 
 import com.intellij.openapi.diagnostic.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -39,6 +41,10 @@ public class OrkaCloudImage implements CloudImage {
     private final String vmMetadata;
     @NotNull
     private final Map<String, OrkaCloudInstance> instances = new ConcurrentHashMap<String, OrkaCloudInstance>();
+    
+    // Legacy instances from old configuration, pending graceful shutdown
+    @NotNull
+    private final Map<String, OrkaLegacyCloudInstance> legacyInstances = new ConcurrentHashMap<>();
 
     /**
      * Creates OrkaCloudImage with unique ID based on profileId and vmConfigName.
@@ -110,15 +116,43 @@ public class OrkaCloudImage implements CloudImage {
         return this.vmMetadata;
     }
 
+    /**
+     * Returns all instances (both regular and legacy).
+     * Legacy instances are included so they appear in TeamCity UI.
+     */
     @NotNull
     public Collection<? extends CloudInstance> getInstances() {
+        List<CloudInstance> allInstances = new ArrayList<>(this.instances.values());
+        allInstances.addAll(this.legacyInstances.values());
+        return Collections.unmodifiableCollection(allInstances);
+    }
+
+    /**
+     * Returns only regular (non-legacy) instances.
+     */
+    @NotNull
+    public Collection<OrkaCloudInstance> getRegularInstances() {
         return Collections.unmodifiableCollection(this.instances.values());
+    }
+
+    /**
+     * Returns only legacy instances pending graceful shutdown.
+     */
+    @NotNull
+    public Collection<OrkaLegacyCloudInstance> getLegacyInstances() {
+        return Collections.unmodifiableCollection(this.legacyInstances.values());
     }
 
     @Nullable
     public OrkaCloudInstance findInstanceById(@NotNull final String instanceId) {
         LOG.debug("findInstanceById with instanceId: " + instanceId);
-        return this.instances.get(instanceId);
+        // First check regular instances
+        OrkaCloudInstance instance = this.instances.get(instanceId);
+        if (instance != null) {
+            return instance;
+        }
+        // Then check legacy instances
+        return this.legacyInstances.get(instanceId);
     }
 
     @Nullable
@@ -132,8 +166,26 @@ public class OrkaCloudImage implements CloudImage {
         return null;
     }
 
+    /**
+     * Returns the instance limit for this image.
+     */
+    public int getInstanceLimit() {
+        return this.instanceLimit;
+    }
+
+    /**
+     * Checks if a new instance can be started.
+     * Only counts regular instances against the limit, legacy instances don't block new ones.
+     */
     public synchronized boolean canStartNewInstance() {
         return this.instanceLimit == OrkaConstants.UNLIMITED_INSTANCES || this.instanceLimit > this.instances.size();
+    }
+
+    /**
+     * Returns the total instance count (regular + legacy) for display purposes.
+     */
+    public int getTotalInstanceCount() {
+        return this.instances.size() + this.legacyInstances.size();
     }
 
     @NotNull
@@ -153,6 +205,34 @@ public class OrkaCloudImage implements CloudImage {
         return new OrkaCloudInstance(this, instanceId, this.getNamespace());
     }
 
+    /**
+     * Adds a legacy instance to this image.
+     * Legacy instances are displayed but pending graceful shutdown.
+     */
+    public void addLegacyInstance(@NotNull OrkaLegacyCloudInstance instance) {
+        LOG.info(String.format("Adding legacy instance: %s (originalImageId=%s)",
+                instance.getInstanceId(), instance.getOriginalImageId()));
+        this.legacyInstances.put(instance.getInstanceId(), instance);
+    }
+
+    /**
+     * Removes a legacy instance from this image.
+     */
+    public void removeLegacyInstance(@NotNull String instanceId) {
+        OrkaLegacyCloudInstance removed = this.legacyInstances.remove(instanceId);
+        if (removed != null) {
+            LOG.info(String.format("Removed legacy instance: %s", instanceId));
+        }
+    }
+
+    /**
+     * Finds a legacy instance by ID.
+     */
+    @Nullable
+    public OrkaLegacyCloudInstance findLegacyInstanceById(@NotNull String instanceId) {
+        return this.legacyInstances.get(instanceId);
+    }
+
     public void terminateInstance(String instanceId) {
         LOG.debug(String.format("Terminate instance with id: %s", instanceId));
         this.removeInstance(instanceId);
@@ -163,10 +243,34 @@ public class OrkaCloudImage implements CloudImage {
     }
 
     void removeInstance(String instanceId) {
+        // Remove from both regular and legacy instances
         this.instances.remove(instanceId);
+        this.legacyInstances.remove(instanceId);
     }
 
     void dispose() {
         this.instances.clear();
+        this.legacyInstances.clear();
+    }
+
+    /**
+     * Returns all regular instances as PersistedInstanceData for storage.
+     * Called before dispose to save running instances.
+     */
+    @NotNull
+    List<PersistedInstanceData> getInstancesForPersistence() {
+        List<PersistedInstanceData> result = new ArrayList<>();
+        for (OrkaCloudInstance instance : this.instances.values()) {
+            if (instance.getStatus() == jetbrains.buildServer.clouds.InstanceStatus.RUNNING
+                    || instance.getStatus() == jetbrains.buildServer.clouds.InstanceStatus.STARTING) {
+                result.add(new PersistedInstanceData(
+                        instance.getInstanceId(),
+                        this.id,
+                        instance.getNamespace(),
+                        instance.getHost(),
+                        instance.getPort()));
+            }
+        }
+        return result;
     }
 }

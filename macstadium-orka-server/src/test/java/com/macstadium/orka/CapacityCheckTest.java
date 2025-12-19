@@ -13,14 +13,11 @@ import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.HttpResponse;
 import com.macstadium.orka.client.OrkaClient;
 import com.macstadium.orka.client.VMResponse;
-
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
-
 import jetbrains.buildServer.clouds.CloudImage;
-
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.testng.annotations.Test;
@@ -47,7 +44,6 @@ public class CapacityCheckTest {
     public void when_image_created_should_have_correct_ids() throws IOException {
         String vmConfigName = "testImage";
         String fullImageId = Utils.getFullImageId(vmConfigName);
-        String displayName = Utils.getDisplayName(vmConfigName);
         OrkaClient orkaClient = mock(OrkaClient.class);
         setupDeploymentMock(orkaClient, "host", 22, "instanceId");
 
@@ -55,7 +51,8 @@ public class CapacityCheckTest {
             orkaClient, getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
 
         OrkaCloudImage image = client.findImageById(fullImageId);
-        
+        final String displayName = Utils.getDisplayName(vmConfigName);
+
         assertNotNull("Image should be found by full ID", image);
         assertEquals("Image ID should be profileId_vmConfigName", fullImageId, image.getId());
         assertEquals("Image name should be vmConfig (profileId)", displayName, image.getName());
@@ -66,10 +63,12 @@ public class CapacityCheckTest {
         String vmConfigName = "same-vm-config";
         String profileId1 = "profile-1";
         String profileId2 = "profile-2";
+        String profileName1 = "Profile 1";
+        String profileName2 = "Profile 2";
         
-        OrkaCloudImage image1 = new OrkaCloudImage(profileId1, vmConfigName, "orka-default", 
+        OrkaCloudImage image1 = new OrkaCloudImage(profileId1, profileName1, vmConfigName, "orka-default", 
             "user", "password", "0", 5, null);
-        OrkaCloudImage image2 = new OrkaCloudImage(profileId2, vmConfigName, "orka-default", 
+        OrkaCloudImage image2 = new OrkaCloudImage(profileId2, profileName2, vmConfigName, "orka-default", 
             "user", "password", "0", 5, null);
         
         // Image IDs should be different
@@ -89,9 +88,9 @@ public class CapacityCheckTest {
         assertTrue("Image1 ID should contain profile1", image1.getId().contains(profileId1));
         assertTrue("Image2 ID should contain profile2", image2.getId().contains(profileId2));
         
-        // Names should be in format: "profileId (vmConfig)"
-        assertEquals("Image1 name format", profileId1 + " (" + vmConfigName + ")", image1.getName());
-        assertEquals("Image2 name format", profileId2 + " (" + vmConfigName + ")", image2.getName());
+        // Names should be in format: "profileName (vmConfig)"
+        assertEquals("Image1 name format", profileName1 + " (" + vmConfigName + ")", image1.getName());
+        assertEquals("Image2 name format", profileName2 + " (" + vmConfigName + ")", image2.getName());
     }
 
     public void when_find_image_by_wrong_id_should_return_null() throws IOException {

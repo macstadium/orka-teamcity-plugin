@@ -39,6 +39,7 @@ import jetbrains.buildServer.clouds.CloudImage;
 import jetbrains.buildServer.clouds.CloudImageParameters;
 import jetbrains.buildServer.clouds.CloudInstance;
 import jetbrains.buildServer.clouds.CloudInstanceUserData;
+import jetbrains.buildServer.clouds.CloudState;
 import jetbrains.buildServer.clouds.CanStartNewInstanceResult;
 import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.clouds.QuotaException;
@@ -70,6 +71,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   private OrkaClient orkaClient;
   private final ScheduledExecutorService scheduledExecutorService;
   private ScheduledFuture<?> removedFailedInstancesScheduledTask;
+  private ScheduledFuture<?> gracefulShutdownScheduledTask;
   private CloudErrorInfo errorInfo;
   private final RemoteAgent remoteAgent;
   private final SSHUtil sshUtil;
@@ -81,9 +83,14 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   // Lock for serializing capacity check + deployment to prevent race conditions
   private final Object deploymentLock = new Object();
 
+  // CloudState for persistence across profile reloads and server restarts
+  @Nullable
+  private final CloudState cloudState;
+
   public OrkaCloudClient(@NotNull final CloudClientParameters params, ExecutorServices executorServices,
-      @NotNull final String profileId) {
+      @NotNull final String profileId, @NotNull final CloudState cloudState) {
     this.profileId = profileId;
+    this.cloudState = cloudState;
     // Extract profile name from description (format: "profile 'NAME'{id=ID}")
     String description = params.getProfileDescription();
     this.profileName = extractProfileName(description, profileId);
@@ -108,22 +115,30 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
     this.initializeBackgroundTasks();
 
-    // Recover existing VMs from Orka (async to not block startup)
+    // Recover existing VMs from Orka and CloudState (async to not block startup)
     this.scheduledExecutorService.submit(this::recoverExistingInstances);
   }
 
   @Used("Tests")
   public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
       ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil) {
-    this(params, client, scheduledExecutorService, remoteAgent, sshUtil, "test-profile", "Test Profile");
+    this(params, client, scheduledExecutorService, remoteAgent, sshUtil, "test-profile", "Test Profile", null);
   }
 
   @Used("Tests")
   public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
       ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil,
       String profileId, String profileName) {
+    this(params, client, scheduledExecutorService, remoteAgent, sshUtil, profileId, profileName, null);
+  }
+
+  @Used("Tests")
+  public OrkaCloudClient(CloudClientParameters params, OrkaClient client,
+      ScheduledExecutorService scheduledExecutorService, RemoteAgent remoteAgent, SSHUtil sshUtil,
+      String profileId, String profileName, @Nullable CloudState cloudState) {
     this.profileId = profileId;
     this.profileName = profileName;
+    this.cloudState = cloudState;
     this.agentDirectory = params.getParameter(OrkaConstants.AGENT_DIRECTORY);
     // For test constructor, serverUrl will be null (buildAgent.properties update
     // will be skipped)
@@ -184,11 +199,19 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   }
 
   private void initializeBackgroundTasks() {
+    // Task to remove failed instances
     RemoveFailedInstancesTask removeFailedInstancesTask = new RemoveFailedInstancesTask(this);
     int initialDelay = 60 * 1000;
     int delay = 5 * initialDelay;
     this.removedFailedInstancesScheduledTask = this.scheduledExecutorService
         .scheduleWithFixedDelay(removeFailedInstancesTask, initialDelay, delay, TimeUnit.MILLISECONDS);
+
+    // Task to handle graceful shutdown of legacy instances
+    GracefulShutdownTask gracefulShutdownTask = new GracefulShutdownTask(this, this.profileId);
+    int gracefulInitialDelay = 30 * 1000; // Start sooner to handle legacy instances
+    int gracefulDelay = 60 * 1000; // Check every minute
+    this.gracefulShutdownScheduledTask = this.scheduledExecutorService
+        .scheduleWithFixedDelay(gracefulShutdownTask, gracefulInitialDelay, gracefulDelay, TimeUnit.MILLISECONDS);
   }
 
   private OrkaCloudImage createImage(CloudClientParameters params) {
@@ -239,20 +262,56 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
   @Nullable
   public OrkaCloudInstance findInstanceByAgent(@NotNull final AgentDescription agentDescription) {
-    final OrkaCloudImage image = this.findImage(agentDescription);
-    if (image == null) {
-      return null;
-    }
     final String instanceId = this.findInstanceId(agentDescription);
     if (instanceId == null) {
       return null;
     }
 
-    OrkaCloudInstance existingInstance = image.findInstanceById(instanceId);
-    if (existingInstance != null) {
-      return existingInstance;
+    // First, try to find in current image (standard lookup)
+    final OrkaCloudImage image = this.findImage(agentDescription);
+    if (image != null) {
+      OrkaCloudInstance existingInstance = image.findInstanceById(instanceId);
+      if (existingInstance != null) {
+        return existingInstance;
+      }
     }
-    return this.createInstanceFromExistingAgent(image, instanceId);
+
+    // Second, check legacy instances by originalImageId
+    // Agent may report old imageId from previous config
+    OrkaCloudInstance legacyInstance = this.findLegacyInstanceByAgent(agentDescription, instanceId);
+    if (legacyInstance != null) {
+      return legacyInstance;
+    }
+
+    // Finally, try to recover from Orka if image exists
+    if (image != null) {
+      return this.createInstanceFromExistingAgent(image, instanceId);
+    }
+
+    return null;
+  }
+
+  /**
+   * Finds legacy instance by checking if agent's imageId matches originalImageId.
+   */
+  @Nullable
+  private OrkaCloudInstance findLegacyInstanceByAgent(@NotNull AgentDescription agentDescription,
+      @NotNull String instanceId) {
+    String agentImageId = agentDescription.getConfigurationParameters().get(CommonConstants.IMAGE_ID_PARAM_NAME);
+    if (agentImageId == null) {
+      return null;
+    }
+
+    for (OrkaCloudImage image : this.images) {
+      for (OrkaLegacyCloudInstance legacy : image.getLegacyInstances()) {
+        if (legacy.getInstanceId().equals(instanceId) && legacy.containsAgent(agentDescription)) {
+          LOG.debug(String.format("[%s] Found legacy instance %s for agent (originalImageId=%s)",
+              this.profileId, instanceId, legacy.getOriginalImageId()));
+          return legacy;
+        }
+      }
+    }
+    return null;
   }
 
   @Nullable
@@ -521,6 +580,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
       instance.setStatus(InstanceStatus.RUNNING);
       LOG.info(String.format("[%s] VM %s setup completed", this.profileId, deployedInstanceId));
+
+      // Register instance in CloudState for persistence across server restarts
+      this.registerInstanceInCloudState(image.getId(), deployedInstanceId);
     } catch (IOException | InterruptedException e) {
       LOG.warnAndDebugDetails(String.format("[%s] VM setup failed for %s",
           this.profileId, instance.getInstanceId()), e);
@@ -642,15 +704,19 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
           LOG.info(String.format("[%s] VM %s deleted from Orka", this.profileId, instance.getInstanceId()));
           // Clear capacity backoff since resources are now freed
           this.clearCapacityBackoff();
+
+          // 3. Remove instance from tracking (TeamCity will remove agent from UI)
+          orkaInstance.setStatus(InstanceStatus.STOPPED);
+          image.terminateInstance(instance.getInstanceId());
+          LOG.info(String.format("[%s] Instance %s terminated", this.profileId, instance.getInstanceId()));
         } else {
+          // Delete failed - mark for retry but keep instance visible
           LOG.warn(String.format("[%s] Failed to delete VM %s from Orka: %s",
               this.profileId, instance.getInstanceId(), response.getMessage()));
+          orkaInstance.setStatus(InstanceStatus.ERROR);
+          orkaInstance.setErrorInfo(new CloudErrorInfo("Delete failed", response.getMessage()));
+          orkaInstance.setMarkedForTermination(true);
         }
-
-        // 3. Remove instance from tracking (TeamCity will remove agent from UI)
-        orkaInstance.setStatus(InstanceStatus.STOPPED);
-        image.terminateInstance(instance.getInstanceId());
-        LOG.info(String.format("[%s] Instance %s terminated", this.profileId, instance.getInstanceId()));
 
       } catch (IOException e) {
         LOG.warn(String.format("[%s] VM termination failed for %s: %s",
@@ -668,14 +734,34 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   }
 
   public void dispose() {
+    LOG.info(String.format("[%s] Disposing OrkaCloudClient...", this.profileId));
+
     if (this.removedFailedInstancesScheduledTask != null) {
       this.removedFailedInstancesScheduledTask.cancel(false);
+    }
+    if (this.gracefulShutdownScheduledTask != null) {
+      this.gracefulShutdownScheduledTask.cancel(false);
+    }
+
+    // Save running instances to LegacyInstancesStorage before clearing
+    // These will be recovered by the new client as legacy instances
+    List<PersistedInstanceData> instancesToSave = new ArrayList<>();
+    for (final OrkaCloudImage image : this.images) {
+      List<PersistedInstanceData> imageInstances = image.getInstancesForPersistence();
+      instancesToSave.addAll(imageInstances);
+    }
+
+    if (!instancesToSave.isEmpty()) {
+      LOG.info(String.format("[%s] Saving %d running instance(s) to LegacyInstancesStorage",
+          this.profileId, instancesToSave.size()));
+      LegacyInstancesStorage.getInstance().store(this.profileId, instancesToSave);
     }
 
     for (final OrkaCloudImage image : this.images) {
       image.dispose();
     }
     this.images.clear();
+    LOG.info(String.format("[%s] OrkaCloudClient disposed", this.profileId));
   }
 
   @Nullable
@@ -711,15 +797,59 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   private static final String TC_IMAGE_ID_KEY = "tc_image_id";
 
   /**
-   * Recovers existing VMs from Orka that belong to this profile.
-   * Called at startup to restore state after profile reload.
+   * Registers instance in CloudState for persistence across server restarts.
+   * CloudState data is stored in TeamCity database.
+   */
+  private void registerInstanceInCloudState(@NotNull String imageId, @NotNull String instanceId) {
+    if (this.cloudState == null) {
+      LOG.debug(String.format("[%s] CloudState not available, skipping persistence registration", this.profileId));
+      return;
+    }
+
+    try {
+      this.cloudState.registerRunningInstance(imageId, instanceId);
+      LOG.debug(String.format("[%s] Registered instance %s in CloudState (imageId=%s)",
+          this.profileId, instanceId, imageId));
+    } catch (Exception e) {
+      // Don't fail VM setup if CloudState registration fails
+      LOG.warn(String.format("[%s] Failed to register instance %s in CloudState: %s",
+          this.profileId, instanceId, e.getMessage()));
+    }
+  }
+
+  /**
+   * Recovers existing VMs from multiple sources:
+   * 1. LegacyInstancesStorage - instances from previous profile config (profile
+   * reload)
+   * 2. Orka API - instances with matching tc_profile_id metadata (server restart)
+   * 
+   * Called at startup to restore state after profile reload or server restart.
    */
   private void recoverExistingInstances() {
-    if (this.orkaClient == null || this.images.isEmpty()) {
+    if (this.images.isEmpty()) {
       return;
     }
 
     OrkaCloudImage image = this.images.get(0);
+
+    // 1. First, recover legacy instances from LegacyInstancesStorage (profile
+    // reload)
+    recoverLegacyInstances(image);
+
+    // 2. Then recover instances from Orka API using metadata (server restart)
+    recoverFromOrka(image);
+  }
+
+  /**
+   * Recovers instances from Orka API by checking VM metadata (tc_profile_id).
+   * This works for both server restart and profile reload scenarios.
+   * VMs are tagged with tc_profile_id during deployment, allowing recovery.
+   */
+  private void recoverFromOrka(OrkaCloudImage image) {
+    if (this.orkaClient == null) {
+      return;
+    }
+
     try {
       VMsResponse vmsResponse = this.orkaClient.getVMs(image.getNamespace());
       java.util.List<OrkaVM> vms = vmsResponse.getVMs();
@@ -739,7 +869,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
           continue;
         }
 
-        // Check if instance already exists
+        // Check if instance already exists (including legacy instances)
         if (image.findInstanceById(vm.getName()) != null) {
           continue;
         }
@@ -750,16 +880,159 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         instance.setHost(this.getRealHost(vm.getIp()));
         instance.setPort(vm.getSsh() > 0 ? vm.getSsh() : 22);
 
-        LOG.info(String.format("[%s] Recovered VM: %s (IP: %s, SSH: %d)",
+        // Register in CloudState for TeamCity tracking
+        this.registerInstanceInCloudState(image.getId(), vm.getName());
+
+        LOG.info(String.format("[%s] Recovered VM from Orka: %s (IP: %s, SSH: %d)",
             this.profileId, vm.getName(), vm.getIp(), instance.getPort()));
         recoveredCount++;
       }
 
       if (recoveredCount > 0) {
-        LOG.info(String.format("[%s] Recovered %d existing VM(s)", this.profileId, recoveredCount));
+        LOG.info(String.format("[%s] Recovered %d existing VM(s) from Orka", this.profileId, recoveredCount));
       }
     } catch (Exception e) {
-      LOG.warn(String.format("[%s] Failed to recover existing VMs: %s", this.profileId, e.getMessage()));
+      LOG.warn(String.format("[%s] Failed to recover existing VMs from Orka: %s", this.profileId, e.getMessage()));
+    }
+  }
+
+  /**
+   * Recovers persisted instances from LegacyInstancesStorage.
+   * - If imageId matches current image: instance continues as normal
+   * - If imageId differs: instance is marked as legacy for graceful shutdown
+   * - If instance count exceeds new limit: excess instances are marked for
+   * graceful shutdown
+   */
+  private void recoverLegacyInstances(OrkaCloudImage image) {
+    List<PersistedInstanceData> persistedData = LegacyInstancesStorage.getInstance()
+        .retrieveAndClear(this.profileId);
+
+    if (persistedData.isEmpty()) {
+      return;
+    }
+
+    LOG.info(String.format("[%s] Found %d persisted instance(s) to recover", this.profileId, persistedData.size()));
+
+    // Separate instances by whether they match current image config
+    List<PersistedInstanceData> sameImageInstances = new ArrayList<>();
+    List<PersistedInstanceData> differentImageInstances = new ArrayList<>();
+
+    for (PersistedInstanceData data : persistedData) {
+      // Verify VM still exists in Orka
+      if (this.orkaClient != null) {
+        try {
+          VMResponse vmResponse = this.getVM(data.getInstanceId(), data.getNamespace());
+          if (!vmResponse.isSuccessful()) {
+            LOG.info(String.format("[%s] VM %s no longer exists in Orka, skipping",
+                this.profileId, data.getInstanceId()));
+            continue;
+          }
+        } catch (IOException e) {
+          LOG.warn(String.format("[%s] Failed to verify VM %s: %s",
+              this.profileId, data.getInstanceId(), e.getMessage()));
+          // Continue anyway - we'll handle errors during termination
+        }
+      }
+
+      if (image.getId().equals(data.getImageId())) {
+        sameImageInstances.add(data);
+      } else {
+        differentImageInstances.add(data);
+      }
+    }
+
+    int recoveredNormal = 0;
+    int recoveredLegacy = 0;
+    int markedForShutdownDueToLimit = 0;
+
+    // Calculate how many instances can be recovered as normal (within limit)
+    int instanceLimit = image.getInstanceLimit();
+    int currentInstanceCount = image.getInstances().size(); // Already recovered from Orka
+    int availableSlots = (instanceLimit == OrkaConstants.UNLIMITED_INSTANCES)
+        ? Integer.MAX_VALUE
+        : Math.max(0, instanceLimit - currentInstanceCount);
+
+    LOG.info(String.format("[%s] Instance limit: %d, current: %d, available slots: %d, same-image instances: %d",
+        this.profileId,
+        instanceLimit == OrkaConstants.UNLIMITED_INSTANCES ? -1 : instanceLimit,
+        currentInstanceCount,
+        availableSlots == Integer.MAX_VALUE ? -1 : availableSlots,
+        sameImageInstances.size()));
+
+    // Recover same-image instances (respecting limit)
+    for (PersistedInstanceData data : sameImageInstances) {
+      if (availableSlots > 0) {
+        // Within limit - recover as normal instance
+        OrkaCloudInstance instance = image.startNewInstance(data.getInstanceId());
+        instance.setStatus(InstanceStatus.RUNNING);
+        if (data.getHost() != null) {
+          instance.setHost(this.getRealHost(data.getHost()));
+        }
+        instance.setPort(data.getPort());
+
+        this.registerInstanceInCloudState(image.getId(), data.getInstanceId());
+
+        LOG.info(String.format("[%s] Recovered instance as NORMAL: %s (host=%s, port=%d)",
+            this.profileId, data.getInstanceId(), data.getHost(), data.getPort()));
+        recoveredNormal++;
+        availableSlots--;
+      } else {
+        // Exceeds limit - recover as legacy for graceful shutdown
+        OrkaLegacyCloudInstance legacyInstance = new OrkaLegacyCloudInstance(
+            image,
+            data.getInstanceId(),
+            data.getNamespace(),
+            data.getImageId());
+        legacyInstance.setStatus(InstanceStatus.RUNNING);
+        if (data.getHost() != null) {
+          legacyInstance.setHost(this.getRealHost(data.getHost()));
+        }
+        legacyInstance.setPort(data.getPort());
+        legacyInstance.setPendingGracefulShutdown(true);
+
+        image.addLegacyInstance(legacyInstance);
+
+        LOG.info(String.format("[%s] Recovered instance as LEGACY (limit exceeded): %s (host=%s, port=%d)",
+            this.profileId, data.getInstanceId(), data.getHost(), data.getPort()));
+        markedForShutdownDueToLimit++;
+      }
+    }
+
+    // Recover different-image instances as legacy (always graceful shutdown)
+    for (PersistedInstanceData data : differentImageInstances) {
+      OrkaLegacyCloudInstance legacyInstance = new OrkaLegacyCloudInstance(
+          image,
+          data.getInstanceId(),
+          data.getNamespace(),
+          data.getImageId());
+      legacyInstance.setStatus(InstanceStatus.RUNNING);
+      if (data.getHost() != null) {
+        legacyInstance.setHost(this.getRealHost(data.getHost()));
+      }
+      legacyInstance.setPort(data.getPort());
+      legacyInstance.setPendingGracefulShutdown(true);
+
+      image.addLegacyInstance(legacyInstance);
+
+      LOG.info(String.format("[%s] Recovered instance as LEGACY (config changed): %s (host=%s, port=%d, oldImageId=%s)",
+          this.profileId, data.getInstanceId(), data.getHost(), data.getPort(), data.getImageId()));
+      recoveredLegacy++;
+    }
+
+    // Summary logging
+    if (recoveredNormal > 0) {
+      LOG.info(String.format("[%s] Recovered %d instance(s) as normal (within limit)",
+          this.profileId, recoveredNormal));
+    }
+    if (markedForShutdownDueToLimit > 0) {
+      LOG.info(String.format("[%s] Marked %d instance(s) for graceful shutdown (limit reduced from %d to %d)",
+          this.profileId, markedForShutdownDueToLimit,
+          currentInstanceCount + recoveredNormal + markedForShutdownDueToLimit,
+          instanceLimit));
+    }
+    if (recoveredLegacy > 0) {
+      LOG.info(String.format("[%s] Recovered %d instance(s) as legacy for graceful shutdown (config changed)",
+          this.profileId, recoveredLegacy));
     }
   }
 
