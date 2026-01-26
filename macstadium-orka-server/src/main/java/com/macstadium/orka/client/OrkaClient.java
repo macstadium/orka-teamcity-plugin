@@ -519,19 +519,50 @@ public class OrkaClient {
   HttpResponse post(String url, String body) throws IOException {
     RequestBody requestBody = RequestBody.create(JSON, body);
     Request request = this.getAuthenticatedBuilder(url).post(requestBody).build();
-    return executeCall(request);
+    HttpResponse response = executeCall(request);
+
+    // Retry once on 401 with refreshed token
+    if (response.getCode() == 401) {
+      LOG.warn("Got 401 Unauthorized on POST, invalidating token and retrying");
+      this.tokenProvider.invalidateToken();
+      requestBody = RequestBody.create(JSON, body);
+      request = this.getAuthenticatedBuilder(url).post(requestBody).build();
+      response = executeCall(request);
+    }
+
+    return response;
   }
 
   @VisibleForTesting
   HttpResponse get(String url) throws IOException {
     Request request = this.getAuthenticatedBuilder(url).get().build();
-    return this.executeCall(request);
+    HttpResponse response = executeCall(request);
+
+    // Retry once on 401 with refreshed token
+    if (response.getCode() == 401) {
+      LOG.warn("Got 401 Unauthorized on GET, invalidating token and retrying");
+      this.tokenProvider.invalidateToken();
+      request = this.getAuthenticatedBuilder(url).get().build();
+      response = executeCall(request);
+    }
+
+    return response;
   }
 
   @VisibleForTesting
   HttpResponse delete(String url) throws IOException {
     Request request = this.getAuthenticatedBuilder(url).delete().build();
-    return executeCall(request);
+    HttpResponse response = executeCall(request);
+
+    // Retry once on 401 with refreshed token
+    if (response.getCode() == 401) {
+      LOG.warn("Got 401 Unauthorized on DELETE, invalidating token and retrying");
+      this.tokenProvider.invalidateToken();
+      request = this.getAuthenticatedBuilder(url).delete().build();
+      response = executeCall(request);
+    }
+
+    return response;
   }
 
   private Builder getAuthenticatedBuilder(String url) throws IOException {

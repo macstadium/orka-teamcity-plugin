@@ -22,5 +22,12 @@ public interface TokenProvider {
      * @return true if the provider is properly configured and can potentially provide tokens
      */
     boolean isValid();
+
+    /**
+     * Invalidates the cached token, forcing a refresh on the next getToken() call.
+     * Used when API returns 401 Unauthorized to retry with a fresh token.
+     * For static tokens, this is a no-op.
+     */
+    void invalidateToken();
 }
 

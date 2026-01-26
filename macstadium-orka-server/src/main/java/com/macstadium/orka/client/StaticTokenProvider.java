@@ -22,5 +22,10 @@ public class StaticTokenProvider implements TokenProvider {
     public boolean isValid() {
         return StringUtil.isNotEmpty(this.token);
     }
+
+    @Override
+    public void invalidateToken() {
+        // Static token cannot be refreshed - no-op
+    }
 }
 

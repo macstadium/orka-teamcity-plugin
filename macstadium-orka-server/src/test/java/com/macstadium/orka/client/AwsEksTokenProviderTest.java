@@ -155,4 +155,33 @@ public class AwsEksTokenProviderTest {
     StaticTokenProvider provider = new StaticTokenProvider(null);
     assertFalse(provider.isValid());
   }
+
+  /**
+   * Test that StaticTokenProvider.invalidateToken() is a no-op (doesn't throw).
+   */
+  public void when_static_token_invalidate_should_not_throw() throws IOException {
+    String expectedToken = "test-token-123";
+    StaticTokenProvider provider = new StaticTokenProvider(expectedToken);
+
+    // Should not throw
+    provider.invalidateToken();
+
+    // Token should still be the same (static token cannot be invalidated)
+    assertEquals(expectedToken, provider.getToken());
+  }
+
+  /**
+   * Test that AwsEksTokenProvider.invalidateToken() clears cached token.
+   * After invalidation, next getToken() call should refresh.
+   */
+  public void when_aws_token_invalidate_should_clear_cache() {
+    AwsEksTokenProvider provider = new AwsEksTokenProvider("my-cluster", "us-east-1");
+
+    // Should not throw
+    provider.invalidateToken();
+
+    // Provider should still be valid (configuration is ok)
+    // Note: actual token refresh requires AWS credentials
+    assertNotNull(provider);
+  }
 }

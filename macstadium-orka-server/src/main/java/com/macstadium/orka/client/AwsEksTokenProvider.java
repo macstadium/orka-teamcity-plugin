@@ -125,6 +125,13 @@ public class AwsEksTokenProvider implements TokenProvider {
   }
 
   @Override
+  public synchronized void invalidateToken() {
+    LOG.info(String.format("Invalidating EKS token for cluster '%s'", clusterName));
+    this.cachedToken = null;
+    this.tokenExpiry = null;
+  }
+
+  @Override
   public boolean isValid() {
     if (StringUtil.isEmpty(clusterName)) {
       LOG.warn("AWS EKS cluster name is not configured");
