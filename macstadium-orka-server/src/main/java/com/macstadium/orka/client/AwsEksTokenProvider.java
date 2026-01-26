@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Base64;
+import java.util.concurrent.ConcurrentHashMap;
 
 import jetbrains.buildServer.log.Loggers;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
@@ -54,13 +55,22 @@ public class AwsEksTokenProvider implements TokenProvider {
   private static final String AWS_WEB_IDENTITY_TOKEN_FILE = "AWS_WEB_IDENTITY_TOKEN_FILE";
   private static final String AWS_ROLE_ARN = "AWS_ROLE_ARN";
 
+  /**
+   * Shared token cache across all AwsEksTokenProvider instances.
+   * Key: "clusterName:region" - allows sharing tokens for the same cluster.
+   */
+  private static final ConcurrentHashMap<String, CachedToken> SHARED_TOKEN_CACHE = new ConcurrentHashMap<>();
+
+  /**
+   * Lock objects for synchronization per cache key.
+   * Avoids using String.intern() which can cause memory leaks.
+   */
+  private static final ConcurrentHashMap<String, Object> LOCK_MAP = new ConcurrentHashMap<>();
+
   private final String clusterName;
   private final Region region;
   private final AwsCredentialsProvider credentialsProvider;
-
-  // volatile ensures visibility across threads for cached token state
-  private volatile String cachedToken;
-  private volatile Instant tokenExpiry;
+  private final String cacheKey;
 
   /**
    * Creates a new AWS EKS token provider.
@@ -81,9 +91,10 @@ public class AwsEksTokenProvider implements TokenProvider {
     this.clusterName = clusterName;
     this.region = Region.of(regionName);
     this.credentialsProvider = createCredentialsProvider();
+    this.cacheKey = clusterName + ":" + this.region.id();
 
-    LOG.debug(String.format("AwsEksTokenProvider initialized: cluster='%s', region='%s'",
-        clusterName, regionName));
+    LOG.debug(String.format("AwsEksTokenProvider initialized: cluster='%s', region='%s', cacheKey='%s'",
+        clusterName, regionName, this.cacheKey));
   }
 
   /**
@@ -117,18 +128,25 @@ public class AwsEksTokenProvider implements TokenProvider {
   }
 
   @Override
-  public synchronized String getToken() throws IOException {
-    if (isTokenExpired()) {
-      refreshToken();
+  public String getToken() throws IOException {
+    CachedToken cached = SHARED_TOKEN_CACHE.get(cacheKey);
+    if (cached == null || cached.isExpired()) {
+      Object lock = LOCK_MAP.computeIfAbsent(cacheKey, k -> new Object());
+      synchronized (lock) {
+        // Double-check after acquiring lock
+        cached = SHARED_TOKEN_CACHE.get(cacheKey);
+        if (cached == null || cached.isExpired()) {
+          cached = refreshToken();
+        }
+      }
     }
-    return cachedToken;
+    return cached.getToken();
   }
 
   @Override
-  public synchronized void invalidateToken() {
-    LOG.info(String.format("Invalidating EKS token for cluster '%s'", clusterName));
-    this.cachedToken = null;
-    this.tokenExpiry = null;
+  public void invalidateToken() {
+    LOG.info(String.format("Invalidating EKS token for cluster '%s' (cacheKey: %s)", clusterName, cacheKey));
+    SHARED_TOKEN_CACHE.remove(cacheKey);
   }
 
   @Override
@@ -149,15 +167,9 @@ public class AwsEksTokenProvider implements TokenProvider {
     }
   }
 
-  private boolean isTokenExpired() {
-    return cachedToken == null
-        || tokenExpiry == null
-        || Instant.now().isAfter(tokenExpiry);
-  }
-
-  private void refreshToken() throws IOException {
+  private CachedToken refreshToken() throws IOException {
     try {
-      LOG.debug(String.format("Refreshing EKS token for cluster '%s'", clusterName));
+      LOG.debug(String.format("Refreshing EKS token for cluster '%s' (cacheKey: %s)", clusterName, cacheKey));
 
       // Resolve AWS credentials
       AwsCredentials credentials = credentialsProvider.resolveCredentials();
@@ -192,12 +204,19 @@ public class AwsEksTokenProvider implements TokenProvider {
 
       // Generate the token
       String presignedUrl = signedRequest.getUri().toString();
-      cachedToken = TOKEN_PREFIX + Base64.getUrlEncoder()
+      String token = TOKEN_PREFIX + Base64.getUrlEncoder()
           .withoutPadding()
           .encodeToString(presignedUrl.getBytes());
-      tokenExpiry = Instant.now().plus(TOKEN_REFRESH_THRESHOLD);
+      Instant expiry = Instant.now().plus(TOKEN_REFRESH_THRESHOLD);
 
-      LOG.info(String.format("EKS token refreshed for cluster '%s', valid until %s", clusterName, tokenExpiry));
+      // Store in shared cache and return
+      CachedToken cachedToken = new CachedToken(token, expiry);
+      SHARED_TOKEN_CACHE.put(cacheKey, cachedToken);
+
+      LOG.info(String.format("EKS token refreshed for cluster '%s', valid until %s (cacheKey: %s)",
+          clusterName, expiry, cacheKey));
+
+      return cachedToken;
 
     } catch (URISyntaxException e) {
       LOG.error(String.format("Invalid STS URI for region '%s': %s", region.id(), e.getMessage()), e);
@@ -205,6 +224,27 @@ public class AwsEksTokenProvider implements TokenProvider {
     } catch (Exception e) {
       LOG.error(String.format("Failed to refresh EKS token for cluster '%s': %s", clusterName, e.getMessage()), e);
       throw new IOException("Failed to get EKS token: " + e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Cached token with expiry time.
+   */
+  private static class CachedToken {
+    private final String token;
+    private final Instant expiry;
+
+    CachedToken(String token, Instant expiry) {
+      this.token = token;
+      this.expiry = expiry;
+    }
+
+    String getToken() {
+      return token;
+    }
+
+    boolean isExpired() {
+      return expiry == null || Instant.now().isAfter(expiry);
     }
   }
 }
