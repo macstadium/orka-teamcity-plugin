@@ -1,7 +1,7 @@
 ext {
     def hasVersionNumber = project.hasProperty('versionNumber') && property('versionNumber') ==~ /\d+\.\d+\.\d+.*/
     versionNumber = hasVersionNumber ? property('versionNumber') : 'SNAPSHOT-' + new Date().format('yyyyMMddHHmmss')
-    teamcityVersion = findProperty('teamcityVersion') ?: '2022.04'
+    teamcityVersion = findProperty('teamcityVersion') ?: '2024.12'
     projectIds = ['group': 'com.macstadium.orka', 'version': versionNumber]
 }
 
@@ -22,20 +22,24 @@ subprojects {
     apply plugin: 'checkstyle'
     
     java {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     checkstyle {
-        toolVersion = '8.45.1'  // Stable version compatible with Java 8-17
+        toolVersion = '10.12.5'  // Latest stable version compatible with Java 21
         configFile = rootProject.file('config/checkstyle/checkstyle.xml')
         ignoreFailures = true  // Ignore legacy style violations
         maxWarnings = 1000
         showViolations = true
     }
 
-    test.useTestNG()
-    jar.version = null
+    tasks.named('test') {
+        useTestNG()
+    }
+    tasks.named('jar') {
+        archiveVersion.set('')
+    }
 }
 
 

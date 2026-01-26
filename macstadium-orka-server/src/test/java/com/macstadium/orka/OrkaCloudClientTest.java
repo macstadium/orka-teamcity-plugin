@@ -268,6 +268,52 @@ public class OrkaCloudClientTest {
     assertEquals(privateHost, instance.getHost());
   }
 
+  // Tests for malformed node mappings - should not crash
+  public void when_node_mappings_malformed_without_semicolon_should_not_crash() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    // Malformed mapping without semicolon
+    String nodeMappings = "10.10.10.3;100.100.100.3\rmalformed_no_semicolon\r10.10.10.5;100.100.100.5";
+
+    // This should not throw ArrayIndexOutOfBoundsException
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName, nodeMappings),
+        this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getScheduledExecutorService(),
+        mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+
+    // Should still work with valid mappings
+    assertEquals(privateHost, instance.getHost());
+  }
+
+  public void when_node_mappings_empty_entries_should_not_crash() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    // Mappings with empty entries
+    String nodeMappings = "10.10.10.3;100.100.100.3\r\r\r10.10.10.5;100.100.100.5";
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName, nodeMappings),
+        this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getScheduledExecutorService(),
+        mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+  }
+
+  public void when_node_mappings_only_semicolon_should_not_crash() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    // Mapping with only semicolon (empty key and value)
+    String nodeMappings = ";\r10.10.10.5;100.100.100.5";
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName, nodeMappings),
+        this.getOrkaClientMock(privateHost, 22, "instanceId"), this.getScheduledExecutorService(),
+        mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+  }
+
   private CloudImage getImage(OrkaCloudClient client) {
     return client.getImages().stream().findFirst().get();
   }

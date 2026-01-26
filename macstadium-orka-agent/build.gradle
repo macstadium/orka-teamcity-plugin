@@ -18,5 +18,7 @@ dependencies {
     testImplementation "org.jetbrains.teamcity:tests-support:$teamcityVersion"
 }
 
-agentPlugin.version = null
-agentPlugin.baseName = 'orka-macstadium'
+tasks.named('agentPlugin') {
+    archiveVersion.set('')
+    archiveBaseName.set('orka-macstadium')
+}

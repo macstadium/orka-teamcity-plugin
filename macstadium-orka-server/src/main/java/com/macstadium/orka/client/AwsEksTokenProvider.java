@@ -58,8 +58,9 @@ public class AwsEksTokenProvider implements TokenProvider {
   private final Region region;
   private final AwsCredentialsProvider credentialsProvider;
 
-  private String cachedToken;
-  private Instant tokenExpiry;
+  // volatile ensures visibility across threads for cached token state
+  private volatile String cachedToken;
+  private volatile Instant tokenExpiry;
 
   /**
    * Creates a new AWS EKS token provider.

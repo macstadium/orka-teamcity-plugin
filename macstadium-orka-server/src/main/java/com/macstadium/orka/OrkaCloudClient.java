@@ -155,7 +155,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   private Map<String, String> getNodeMappings(String mappingsData) {
     if (StringUtil.isNotEmpty(mappingsData)) {
       String[] mappings = mappingsData.split("\\r?\\n|\\r");
-      return Arrays.stream(mappings).map(m -> m.split(";"))
+      return Arrays.stream(mappings)
+          .map(m -> m.split(";"))
+          .filter(pair -> pair.length >= 2 && !pair[0].isEmpty())
           .collect(Collectors.toMap(pair -> pair[0], pair -> pair[1]));
     }
     return new HashMap<String, String>();

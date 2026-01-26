@@ -45,26 +45,33 @@ public class RemoteAgent {
 
     // Prepare metadata file with instanceId and imageId
     File tempFile = File.createTempFile(CommonConstants.METADATA_FILE_PREFIX, ".tmp");
-    String text = instanceId + System.lineSeparator() + imageId;
-    if (data.getCustomAgentConfigurationParameters()
-        .containsKey(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM)) {
-      text = text + System.lineSeparator() + data.getCustomAgentConfigurationParameters()
-          .get(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM);
-    }
-    FileUtil.writeFileAndReportErrors(tempFile, text);
+    try {
+      String text = instanceId + System.lineSeparator() + imageId;
+      if (data.getCustomAgentConfigurationParameters()
+          .containsKey(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM)) {
+        text = text + System.lineSeparator() + data.getCustomAgentConfigurationParameters()
+            .get(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM);
+      }
+      FileUtil.writeFileAndReportErrors(tempFile, text);
 
-    LOG.debug(String.format("Starting agent on VM %s: instanceId=%s, imageId=%s", host, instanceId, imageId));
+      LOG.debug(String.format("Starting agent on VM %s: instanceId=%s, imageId=%s", host, instanceId, imageId));
 
-    try (SSHClient ssh = new SSHClient()) {
-      this.initSSHClient(ssh, host, sshPort, sshUser, sshPassword);
+      try (SSHClient ssh = new SSHClient()) {
+        this.initSSHClient(ssh, host, sshPort, sshUser, sshPassword);
 
-      // Upload metadata file
-      ssh.newSCPFileTransfer().upload(tempFile.getAbsolutePath(), "/tmp");
-      LOG.debug(String.format("Metadata uploaded to %s:/tmp/%s", host, tempFile.getName()));
+        // Upload metadata file
+        ssh.newSCPFileTransfer().upload(tempFile.getAbsolutePath(), "/tmp");
+        LOG.debug(String.format("Metadata uploaded to %s:/tmp/%s", host, tempFile.getName()));
 
-      // Note: Agent auto-starts on VM boot (configured in VM image)
-      // We don't call agent.sh start here - agent will read metadata on auto-start
-      LOG.debug(String.format("Metadata configured for VM %s (agent will auto-start and read it)", instanceId));
+        // Note: Agent auto-starts on VM boot (configured in VM image)
+        // We don't call agent.sh start here - agent will read metadata on auto-start
+        LOG.debug(String.format("Metadata configured for VM %s (agent will auto-start and read it)", instanceId));
+      }
+    } finally {
+      // Clean up temp file to prevent resource leak
+      if (tempFile.exists() && !tempFile.delete()) {
+        LOG.warn(String.format("Failed to delete temp file: %s", tempFile.getAbsolutePath()));
+      }
     }
   }
 

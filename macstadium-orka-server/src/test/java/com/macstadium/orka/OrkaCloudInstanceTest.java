@@ -1,6 +1,8 @@
 package com.macstadium.orka;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -17,6 +19,35 @@ import org.testng.annotations.Test;
 public class OrkaCloudInstanceTest {
   private static final String TEST_PROFILE_ID = "test-profile";
   private static final String TEST_PROFILE_NAME = "Test Profile";
+
+  // Test that host is never null after instance creation
+  public void when_instance_created_host_should_not_be_null() throws IOException {
+    String instanceId = "id";
+    String vmConfigName = "orka-image";
+    OrkaCloudInstance instance = this.getInstance(instanceId, vmConfigName);
+
+    // host should be initialized (not null) even before setHost is called
+    assertNotNull("Host should not be null after instance creation", instance.getHost());
+  }
+
+  public void when_instance_created_and_host_set_should_return_host() throws IOException {
+    String instanceId = "id";
+    String vmConfigName = "orka-image";
+    String expectedHost = "10.10.10.1";
+    OrkaCloudInstance instance = this.getInstance(instanceId, vmConfigName);
+
+    instance.setHost(expectedHost);
+    assertEquals(expectedHost, instance.getHost());
+  }
+
+  public void when_instance_created_port_should_be_zero() throws IOException {
+    String instanceId = "id";
+    String vmConfigName = "orka-image";
+    OrkaCloudInstance instance = this.getInstance(instanceId, vmConfigName);
+
+    // port should be 0 (default) before setPort is called
+    assertEquals(0, instance.getPort());
+  }
 
   public void when_contains_agent_with_correct_values_should_return_true() throws IOException {
     String instanceId = "id";

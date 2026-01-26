@@ -41,6 +41,7 @@ public class OrkaCloudInstance implements CloudInstance {
         this.status = InstanceStatus.SCHEDULED_TO_START;
         this.id = instanceId;
         this.startDate = new Date();
+        this.host = "";  // Initialize to empty string to avoid NPE
     }
 
     public boolean isMarkedForTermination() {
