@@ -574,7 +574,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
           this.profileId, deployedInstanceId, image.getUser(), this.agentDirectory));
 
       // Update buildAgent.properties ONCE, then start agent ONCE
-      this.updateBuildAgentPropertiesOnce(host, sshPort, image.getUser(), image.getPassword(), deployedInstanceId);
+      this.updateBuildAgentPropertiesOnce(host, sshPort, image.getUser(), image.getPassword(),
+          deployedInstanceId, image.getNamespace());
 
       // Start agent without retry - if it fails, entire VM setup fails
       this.remoteAgent.startAgent(deployedInstanceId, image.getId(), host, sshPort, image.getUser(),
@@ -626,6 +627,42 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     return this.orkaClient.checkCapacity(vmConfigName, namespace);
   }
 
+  /**
+   * Gets the node name where a VM is running.
+   * Uses getVMs() API and filters by VM name.
+   */
+  private String getVmNodeName(String vmName, String namespace) {
+    try {
+      VMsResponse response = this.orkaClient.getVMs(namespace);
+      for (OrkaVM vm : response.getVMs()) {
+        if (vmName.equals(vm.getName())) {
+          LOG.debug(String.format("[%s] VM %s is on node: %s", this.profileId, vmName, vm.getNode()));
+          return vm.getNode();
+        }
+      }
+      LOG.warn(String.format("[%s] Could not find VM %s in namespace %s", this.profileId, vmName, namespace));
+    } catch (IOException e) {
+      LOG.warn(String.format("[%s] Failed to get node name for VM %s: %s", this.profileId, vmName, e.getMessage()));
+    }
+    return null;
+  }
+
+  /**
+   * Extracts location from node name.
+   * Node name format: "ns-h-tc-mac-98" or "dub-h-tc-mac-78"
+   * Returns first part before "-": "ns" or "dub"
+   */
+  private String extractLocationFromNodeName(String nodeName) {
+    if (StringUtil.isEmpty(nodeName)) {
+      return null;
+    }
+    String[] parts = nodeName.split("-");
+    if (parts.length > 0 && !parts[0].isEmpty()) {
+      return parts[0];
+    }
+    return null;
+  }
+
   private void waitForVM(String host, int sshPort) throws InterruptedException, IOException {
     int retries = 12;
     int secondsBetweenRetries = 10;
@@ -633,7 +670,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   }
 
   private void updateBuildAgentPropertiesOnce(String host, int sshPort, String sshUser, String sshPassword,
-      String instanceId) throws IOException {
+      String instanceId, String namespace) throws IOException {
     // Update buildAgent.properties if agentDirectory is configured
     // Always update agent name, update serverUrl only if configured
     if (this.agentDirectory == null || this.agentDirectory.trim().isEmpty()) {
@@ -641,7 +678,20 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     }
 
     String buildAgentPropertiesPath = String.format("%s/conf/buildAgent.properties", this.agentDirectory);
-    String agentName = "vm-mac-" + instanceId;
+
+    // Get location from node name via Orka API
+    String nodeName = this.getVmNodeName(instanceId, namespace);
+    String location = this.extractLocationFromNodeName(nodeName);
+
+    // Build agent name with location if available
+    String agentName;
+    if (StringUtil.isNotEmpty(location)) {
+      agentName = "vm-mac-" + location + "-" + instanceId;
+      LOG.info(String.format("[%s] Agent name with location: %s (node: %s)", this.profileId, agentName, nodeName));
+    } else {
+      agentName = "vm-mac-" + instanceId;
+      LOG.debug(String.format("[%s] Agent name without location: %s", this.profileId, agentName));
+    }
     boolean updateServerUrl = (this.serverUrl != null && !this.serverUrl.trim().isEmpty());
 
     try (net.schmizz.sshj.SSHClient ssh = new net.schmizz.sshj.SSHClient()) {

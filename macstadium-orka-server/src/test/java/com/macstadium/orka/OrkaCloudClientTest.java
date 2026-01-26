@@ -15,7 +15,9 @@ import com.macstadium.orka.client.DeletionResponse;
 import com.macstadium.orka.client.DeploymentResponse;
 import com.macstadium.orka.client.HttpResponse;
 import com.macstadium.orka.client.OrkaClient;
+import com.macstadium.orka.client.OrkaVM;
 import com.macstadium.orka.client.VMResponse;
+import com.macstadium.orka.client.VMsResponse;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -314,6 +316,77 @@ public class OrkaCloudClientTest {
     assertNotNull(instance);
   }
 
+  // Tests for location extraction from node name
+  public void when_vm_not_found_in_vms_list_should_not_crash() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, "instanceId");
+    // Override getVMs to return empty list - VM not found scenario
+    VMsResponse emptyResponse = new VMsResponse(java.util.Collections.emptyList(), null);
+    emptyResponse.setHttpResponse(new HttpResponse("vms", 200, true));
+    when(orkaClient.getVMs(any())).thenReturn(emptyResponse);
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+  }
+
+  public void when_getVMs_throws_exception_should_not_crash() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, "instanceId");
+    // Override getVMs to throw IOException
+    when(orkaClient.getVMs(any())).thenThrow(new IOException("API error"));
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+  }
+
+  public void when_node_name_has_no_hyphen_should_use_full_name_as_location() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    String instanceId = "instanceId";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, instanceId);
+    // Node name without hyphen
+    OrkaVM orkaVM = new OrkaVM(instanceId, "localhost", "Running", "arm64");
+    VMsResponse vmsResponse = new VMsResponse(java.util.Arrays.asList(orkaVM), null);
+    vmsResponse.setHttpResponse(new HttpResponse("vms", 200, true));
+    when(orkaClient.getVMs(any())).thenReturn(vmsResponse);
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+  }
+
+  public void when_node_name_is_null_should_not_crash() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    String instanceId = "instanceId";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, instanceId);
+    // Node name is null
+    OrkaVM orkaVM = new OrkaVM(instanceId, null, "Running", "arm64");
+    VMsResponse vmsResponse = new VMsResponse(java.util.Arrays.asList(orkaVM), null);
+    vmsResponse.setHttpResponse(new HttpResponse("vms", 200, true));
+    when(orkaClient.getVMs(any())).thenReturn(vmsResponse);
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+  }
+
   private CloudImage getImage(OrkaCloudClient client) {
     return client.getImages().stream().findFirst().get();
   }
@@ -345,6 +418,11 @@ public class OrkaCloudClientTest {
         // Mock checkCapacity to return success by default
         CapacityInfo capacityInfo = new CapacityInfo(24, 128000, 5, 5, true, "Capacity available");
         when(orkaClient.checkCapacity(any(), any())).thenReturn(capacityInfo);
+        // Mock getVMs for location extraction - return VM with node name
+        OrkaVM orkaVM = new OrkaVM(instanceId, "dub-h-tc-mac-78", "Running", "arm64");
+        VMsResponse vmsResponse = new VMsResponse(java.util.Arrays.asList(orkaVM), null);
+        vmsResponse.setHttpResponse(new HttpResponse("vms", 200, true));
+        when(orkaClient.getVMs(any())).thenReturn(vmsResponse);
         return orkaClient;
     }
 
