@@ -32,7 +32,7 @@ public class OrkaCloudInstance implements CloudInstance {
     private volatile InstanceStatus status;
     @Nullable
     private volatile CloudErrorInfo errorInfo;
-    private boolean markedForTermination;
+    private volatile boolean markedForTermination;
     private volatile boolean agentConnectedOnce = false;
 
     public OrkaCloudInstance(@NotNull final OrkaCloudImage image, @NotNull final String instanceId,
