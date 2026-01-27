@@ -626,6 +626,13 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         this.profileId, instance.getInstanceId(), AGENT_CONNECTION_TIMEOUT_MINUTES));
 
     this.scheduledExecutorService.schedule(() -> {
+      // Skip if instance is no longer tracked by its image
+      if (instance.getImage().findInstanceById(instance.getInstanceId()) == null) {
+        LOG.debug(String.format("[%s] Agent check skipped for %s: instance no longer tracked",
+            this.profileId, instance.getInstanceId()));
+        return;
+      }
+
       // Skip if instance is no longer running
       if (instance.getStatus() != InstanceStatus.RUNNING) {
         LOG.debug(String.format("[%s] Agent check skipped for %s: status=%s",
