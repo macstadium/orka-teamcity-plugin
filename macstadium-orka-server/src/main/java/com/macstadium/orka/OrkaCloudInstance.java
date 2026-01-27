@@ -33,6 +33,7 @@ public class OrkaCloudInstance implements CloudInstance {
     @Nullable
     private volatile CloudErrorInfo errorInfo;
     private boolean markedForTermination;
+    private volatile boolean agentConnectedOnce = false;
 
     public OrkaCloudInstance(@NotNull final OrkaCloudImage image, @NotNull final String instanceId,
             @NotNull final String namespace) {
@@ -50,6 +51,15 @@ public class OrkaCloudInstance implements CloudInstance {
 
     public void setMarkedForTermination(boolean markedForTermination) {
         this.markedForTermination = markedForTermination;
+    }
+
+    public boolean hasAgentConnected() {
+        return agentConnectedOnce;
+    }
+
+    public void markAgentConnected() {
+        this.agentConnectedOnce = true;
+        LOG.debug(String.format("Agent connected for instance %s", this.id));
     }
 
     @NotNull
@@ -135,8 +145,12 @@ public class OrkaCloudInstance implements CloudInstance {
         String agentImageId = configParams.get(OrkaConstants.IMAGE_ID_PARAM_NAME);
 
         boolean matches = this.id.equals(agentInstanceId) && getImageId().equals(agentImageId);
-        
-        LOG.debug(String.format("Agent match check for VM %s: agent(instance=%s, image=%s) -> %s", 
+
+        if (matches && !this.agentConnectedOnce) {
+            this.markAgentConnected();
+        }
+
+        LOG.debug(String.format("Agent match check for VM %s: agent(instance=%s, image=%s) -> %s",
                 this.id, agentInstanceId, agentImageId, matches ? "MATCH" : "NO MATCH"));
 
         return matches;

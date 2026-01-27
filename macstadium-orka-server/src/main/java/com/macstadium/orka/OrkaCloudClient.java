@@ -58,6 +58,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
   private static final long CAPACITY_CACHE_TTL_MS = 30_000; // 30 seconds
   private static final long CAPACITY_FAILURE_BACKOFF_MS = 30_000; // 30 seconds backoff after failure
 
+  // Agent connection timeout - if agent doesn't connect within this time, VM is marked for termination
+  private static final long AGENT_CONNECTION_TIMEOUT_MINUTES = 20;
+
   // Pattern to extract profile name from description: "profile 'NAME'{id=ID}"
   private static final Pattern PROFILE_NAME_PATTERN = Pattern.compile("profile\\s+'([^']+)'");
 
@@ -586,6 +589,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
       // Register instance in CloudState for persistence across server restarts
       this.registerInstanceInCloudState(image.getId(), deployedInstanceId);
+
+      // Schedule check to verify agent connects to TeamCity
+      this.scheduleAgentConnectionCheck(instance);
     } catch (IOException | InterruptedException e) {
       LOG.warnAndDebugDetails(String.format("[%s] VM setup failed for %s",
           this.profileId, instance.getInstanceId()), e);
@@ -608,6 +614,51 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     } else {
       this.terminateInstance(instance);
     }
+  }
+
+  /**
+   * Schedules a check to verify agent connected to TeamCity.
+   * If agent hasn't connected within timeout, marks instance for termination.
+   * This prevents orphan VMs that exist in Orka but whose agents never register.
+   */
+  private void scheduleAgentConnectionCheck(OrkaCloudInstance instance) {
+    LOG.info(String.format("[%s] Scheduling agent connection check for VM %s in %d minutes",
+        this.profileId, instance.getInstanceId(), AGENT_CONNECTION_TIMEOUT_MINUTES));
+
+    this.scheduledExecutorService.schedule(() -> {
+      // Skip if instance is no longer running
+      if (instance.getStatus() != InstanceStatus.RUNNING) {
+        LOG.debug(String.format("[%s] Agent check skipped for %s: status=%s",
+            this.profileId, instance.getInstanceId(), instance.getStatus()));
+        return;
+      }
+
+      // Skip if already marked for termination
+      if (instance.isMarkedForTermination()) {
+        LOG.debug(String.format("[%s] Agent check skipped for %s: already marked for termination",
+            this.profileId, instance.getInstanceId()));
+        return;
+      }
+
+      // Check if agent connected
+      if (instance.hasAgentConnected()) {
+        LOG.debug(String.format("[%s] Agent check passed for %s: agent connected",
+            this.profileId, instance.getInstanceId()));
+        return;
+      }
+
+      // Agent did not connect within timeout - mark for termination
+      LOG.warn(String.format("[%s] VM %s: agent did not connect within %d minutes, marking for termination",
+          this.profileId, instance.getInstanceId(), AGENT_CONNECTION_TIMEOUT_MINUTES));
+
+      instance.setStatus(InstanceStatus.ERROR);
+      instance.setErrorInfo(new CloudErrorInfo(
+          "Agent connection timeout",
+          String.format("TeamCity agent did not register within %d minutes. VM will be deleted.",
+              AGENT_CONNECTION_TIMEOUT_MINUTES)));
+      instance.setMarkedForTermination(true);
+
+    }, AGENT_CONNECTION_TIMEOUT_MINUTES, TimeUnit.MINUTES);
   }
 
   private DeploymentResponse deployVM(String vmName, String vmConfig, String namespace, String vmMetadata)
