@@ -41,7 +41,7 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
 # Full build with tests
 ./gradlew clean build
 
-# Run tests only (56 tests)
+# Run tests only (86 tests)
 ./gradlew test
 
 # Compile without tests
@@ -64,7 +64,7 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
 
 ## Build Artifacts
 
-- Server plugin: `macstadium-orka-server/build/distributions/orka-macstadium.zip` (~5.4 MB)
+- Server plugin: `macstadium-orka-server/build/distributions/orka-macstadium.zip` (~14 MB)
 - Agent plugin: `macstadium-orka-agent/build/distributions/orka-macstadium.zip` (~4.3 KB)
 
 ## Key Components
@@ -118,6 +118,17 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
 - SSH availability wait: 12 retries (120 seconds)
 - Updates `buildAgent.properties` via SSH
 - Starts TeamCity agent after VM is ready
+
+### Token Management
+- Token providers implement `TokenProvider` interface
+- `invalidateToken()` clears cache on authentication failures (401)
+- Automatic retry after token refresh
+- Shared cache for same cluster/region (prevents redundant token generation)
+
+### Agent Lifecycle Monitoring
+- Agent connection tracked via `containsAgent()` callback from TeamCity
+- Scheduled timeout checks for orphan VM detection
+- `RemoveFailedInstancesTask` cleans up instances marked for termination
 
 ## Development Guidelines
 
@@ -178,9 +189,6 @@ CloudInstance        // Running VM instance representation
 - `canStartNewInstance()` - legacy method (deprecated since 2018.1), kept for compatibility
 - No deprecated interfaces used in core code
 
-### Gradle Plugin Warning
-The `com.github.rodm.teamcity-*` plugins v1.5.2 show deprecation warnings recommending `io.github.rodm.teamcity-*`. This is cosmetic and does not affect functionality.
-
 ## Known Limitations
 
 - Requires bidirectional connectivity between TeamCity and Orka
@@ -214,12 +222,14 @@ When modifying these areas, ensure thorough testing:
 
 | Area | File | Risk | Tests Required |
 |------|------|------|----------------|
-| Node mappings parsing | `OrkaCloudClient.java:155-162` | Crash on malformed input | Unit tests exist |
+| Node mappings parsing | `OrkaCloudClient.java` | Crash on malformed input | Unit tests exist |
 | Instance initialization | `OrkaCloudInstance.java` constructor | NPE if fields not initialized | Unit tests exist |
-| Token caching | `AwsEksTokenProvider.java:61-62` | Race condition | Needs AWS credentials |
-| Temp file handling | `RemoteAgent.java:47-68` | Resource leak | Manual testing |
+| Token caching | `AwsEksTokenProvider.java` | Race condition | Unit tests exist |
+| Temp file handling | `RemoteAgent.java` | Resource leak | Manual testing |
 | SSH connections | `RemoteAgent.java`, `SSHUtil.java` | Connection failures | Manual testing on Orka |
-| Capacity checking | `OrkaCloudClient.java:361-392` | Race conditions | Unit tests exist |
+| Capacity checking | `OrkaCloudClient.java` | Race conditions | Unit tests exist |
+| Scheduled tasks | `OrkaCloudClient.java` | Task not executed or executed on stale data | Unit tests exist |
+| HTTP retry logic | `OrkaClient.java` | Failed requests not retried | Unit tests exist |
 
 ## Documentation
 
@@ -241,7 +251,7 @@ When modifying these areas, ensure thorough testing:
 3. **Run validation before committing:**
    ```bash
    ./gradlew compileJava   # Verify compilation
-   ./gradlew test          # Run all tests (56 tests)
+   ./gradlew test          # Run all tests (86 tests)
    ./gradlew check         # Checkstyle validation
    ```
 
@@ -254,7 +264,7 @@ When modifying these areas, ensure thorough testing:
 
 | Test Type | Command | Description |
 |-----------|---------|-------------|
-| All tests | `./gradlew test` | Runs all 56 unit tests |
+| All tests | `./gradlew test` | Runs all 86 unit tests |
 | Specific test | `./gradlew test --tests "ClassName"` | Run single test class |
 | Specific method | `./gradlew test --tests "ClassName.methodName"` | Run single test method |
 | With verbose output | `./gradlew test --info` | Detailed test output |
@@ -262,12 +272,13 @@ When modifying these areas, ensure thorough testing:
 **Test locations:**
 - `macstadium-orka-server/src/test/java/` - main test directory
 - Key test files:
-  - `OrkaCloudClientTest.java` - cloud client tests (incl. node mappings validation)
+  - `OrkaCloudClientTest.java` - cloud client tests (VM lifecycle, node mappings, agent timeout)
   - `OrkaCloudInstanceTest.java` - instance lifecycle tests
   - `OrkaCloudImageTest.java` - image management tests
   - `CapacityCheckTest.java` - capacity logic tests
   - `RemoveFailedInstancesTaskTest.java` - background task tests
-  - `AwsEksTokenProviderTest.java` - AWS token provider tests
+  - `AwsEksTokenProviderTest.java` - AWS token provider and cache tests
+  - `OrkaClientTest.java` - HTTP client, token handling, retry logic tests
 
 **Test coverage notes:**
 - Core components (`OrkaCloudClient`, `OrkaCloudImage`, `OrkaCloudInstance`) have good coverage
@@ -323,26 +334,33 @@ Extend `OrkaClient.java` and add corresponding Response DTOs in `client/` packag
 - Termination: via `OrkaCloudClient.terminateInstance()`
 - Recovery: `OrkaCloudClient.recoverInstances()`
 
-## Recent Changes
+### Scheduled Tasks Pattern
+When scheduling delayed checks:
+1. Always verify object state before acting (instance may be terminated/changed)
+2. Use `volatile` for fields accessed from scheduled threads
+3. Don't cancel tasks on state change - let them run and check state
+4. Log skipped checks at DEBUG level, actions at INFO/WARN
 
-### Code Quality Improvements (2026-01)
+### HTTP Retry Pattern
+For API calls that may fail due to expired tokens:
+1. Execute request
+2. If 401 → call `tokenProvider.invalidateToken()`
+3. Retry request with fresh token
+4. Return result (success or second failure)
 
-**Fixed issues:**
-| Issue | File | Fix |
-|-------|------|-----|
-| ArrayIndexOutOfBounds on malformed node mappings | `OrkaCloudClient.java:158` | Added filter for entries with `<2` parts |
-| NPE - host field not initialized | `OrkaCloudInstance.java:44` | Initialize `host = ""` in constructor |
-| Race condition in token cache | `AwsEksTokenProvider.java:61-62` | Added `volatile` modifier |
-| Temp file resource leak | `RemoteAgent.java:47-68` | Added `finally` block with cleanup |
+### Shared Cache Pattern
+For resources shared across multiple instances (e.g., tokens):
+1. Use `ConcurrentHashMap` for thread-safe storage
+2. Use composite cache key (e.g., `cluster:region`)
+3. Synchronize only the refresh operation, not reads
+4. Provide `invalidate()` method for cache clearing
 
-**New tests added:**
-- `OrkaCloudClientTest` - malformed node mappings tests (3 tests)
-- `OrkaCloudInstanceTest` - host initialization tests (3 tests)
-- `AwsEksTokenProviderTest` - token provider validation tests (10 tests)
+## Version History
 
-**Build system updates:**
+### Build System (2026-01)
 - Java: 8 → 21
 - Gradle: 7.6.4 → 8.5
 - TeamCity API: 2022.04 → 2024.12
 - Mockito: 4.11.0 → 5.14.2
 - Checkstyle: 8.45.1 → 10.12.5
+- Gradle plugin: `com.github.rodm` → `io.github.rodm`
