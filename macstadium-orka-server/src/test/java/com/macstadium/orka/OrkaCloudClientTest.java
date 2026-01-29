@@ -25,11 +25,14 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import jetbrains.buildServer.clouds.CloudImage;
 import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.serverSide.AgentDescription;
 
+import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.testng.annotations.Test;
@@ -385,6 +388,217 @@ public class OrkaCloudClientTest {
 
     OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
     assertNotNull(instance);
+  }
+
+  // Tests for agent connection timeout (orphan VM detection)
+
+  /**
+   * Test that agent connection check is scheduled after VM setup.
+   */
+  public void when_vm_started_should_schedule_agent_connection_check() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, "instanceId");
+    ScheduledExecutorService scheduledExecutor = mock(ScheduledExecutorService.class);
+
+    // Capture the scheduled task
+    ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+    ArgumentCaptor<Long> delayCaptor = ArgumentCaptor.forClass(Long.class);
+    ArgumentCaptor<TimeUnit> timeUnitCaptor = ArgumentCaptor.forClass(TimeUnit.class);
+
+    when(scheduledExecutor.submit(any(Runnable.class))).thenAnswer(new Answer<Future<?>>() {
+      @Override
+      public Future<?> answer(InvocationOnMock invocation) throws Throwable {
+        Runnable r = (Runnable) invocation.getArguments()[0];
+        r.run();
+        return CompletableFuture.completedFuture(null);
+      }
+    });
+    when(scheduledExecutor.schedule(runnableCaptor.capture(), delayCaptor.capture(), timeUnitCaptor.capture()))
+        .thenReturn(mock(ScheduledFuture.class));
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, scheduledExecutor, mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    client.startNewInstance(this.getImage(client), null);
+
+    // Verify schedule was called with 20 minutes delay
+    assertEquals(Long.valueOf(20), delayCaptor.getValue());
+    assertEquals(TimeUnit.MINUTES, timeUnitCaptor.getValue());
+  }
+
+  /**
+   * Test that when agent has connected, the timeout check does not mark instance for termination.
+   */
+  public void when_agent_connected_before_timeout_should_not_mark_for_termination() throws IOException {
+    String vmConfigName = "imageId";
+    String fullImageId = Utils.getFullImageId(vmConfigName);
+    String privateHost = "10.10.10.4";
+    String instanceId = "instanceId";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, instanceId);
+
+    // Capture the scheduled Runnable so we can execute it manually
+    final Runnable[] capturedRunnable = new Runnable[1];
+    ScheduledExecutorService scheduledExecutor = mock(ScheduledExecutorService.class);
+    when(scheduledExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
+      Runnable r = (Runnable) invocation.getArguments()[0];
+      r.run();
+      return CompletableFuture.completedFuture(null);
+    });
+    when(scheduledExecutor.schedule(any(Runnable.class), any(Long.class), any(TimeUnit.class)))
+        .thenAnswer(invocation -> {
+          capturedRunnable[0] = (Runnable) invocation.getArguments()[0];
+          return mock(ScheduledFuture.class);
+        });
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, scheduledExecutor, mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+    assertEquals(InstanceStatus.RUNNING, instance.getStatus());
+
+    // Simulate agent connection via containsAgent callback
+    AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, fullImageId);
+    assertTrue("Agent should match", instance.containsAgent(agentDescription));
+    assertTrue("Agent should be marked as connected", instance.hasAgentConnected());
+
+    // Now run the timeout check
+    assertNotNull("Scheduled runnable should be captured", capturedRunnable[0]);
+    capturedRunnable[0].run();
+
+    // Instance should still be RUNNING, not marked for termination
+    assertEquals(InstanceStatus.RUNNING, instance.getStatus());
+    assertTrue("Instance should NOT be marked for termination", !instance.isMarkedForTermination());
+  }
+
+  /**
+   * Test that when agent has NOT connected within timeout, instance is marked for termination.
+   */
+  public void when_agent_not_connected_after_timeout_should_mark_for_termination() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    String instanceId = "instanceId";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, instanceId);
+
+    // Capture the scheduled Runnable
+    final Runnable[] capturedRunnable = new Runnable[1];
+    ScheduledExecutorService scheduledExecutor = mock(ScheduledExecutorService.class);
+    when(scheduledExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
+      Runnable r = (Runnable) invocation.getArguments()[0];
+      r.run();
+      return CompletableFuture.completedFuture(null);
+    });
+    when(scheduledExecutor.schedule(any(Runnable.class), any(Long.class), any(TimeUnit.class)))
+        .thenAnswer(invocation -> {
+          capturedRunnable[0] = (Runnable) invocation.getArguments()[0];
+          return mock(ScheduledFuture.class);
+        });
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, scheduledExecutor, mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+    assertEquals(InstanceStatus.RUNNING, instance.getStatus());
+
+    // Do NOT simulate agent connection - agent never connected
+
+    // Run the timeout check
+    assertNotNull("Scheduled runnable should be captured", capturedRunnable[0]);
+    capturedRunnable[0].run();
+
+    // Instance should be marked for termination with ERROR status
+    assertEquals(InstanceStatus.ERROR, instance.getStatus());
+    assertTrue("Instance should be marked for termination", instance.isMarkedForTermination());
+    assertNotNull("Error info should be set", instance.getErrorInfo());
+    assertTrue("Error message should mention timeout",
+        instance.getErrorInfo().getMessage().contains("timeout"));
+  }
+
+  /**
+   * Test that when instance is already terminated before timeout, check is skipped.
+   */
+  public void when_instance_terminated_before_timeout_should_skip_check() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    String instanceId = "instanceId";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, instanceId);
+
+    // Capture the scheduled Runnable
+    final Runnable[] capturedRunnable = new Runnable[1];
+    ScheduledExecutorService scheduledExecutor = mock(ScheduledExecutorService.class);
+    when(scheduledExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
+      Runnable r = (Runnable) invocation.getArguments()[0];
+      r.run();
+      return CompletableFuture.completedFuture(null);
+    });
+    when(scheduledExecutor.schedule(any(Runnable.class), any(Long.class), any(TimeUnit.class)))
+        .thenAnswer(invocation -> {
+          capturedRunnable[0] = (Runnable) invocation.getArguments()[0];
+          return mock(ScheduledFuture.class);
+        });
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, scheduledExecutor, mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+
+    // Terminate the instance before timeout fires
+    client.terminateInstance(instance);
+
+    // Run the timeout check
+    assertNotNull("Scheduled runnable should be captured", capturedRunnable[0]);
+    capturedRunnable[0].run();
+
+    // Check should be skipped - instance already terminated, no double-marking
+    // The instance was already removed from image, so check should bail out early
+  }
+
+  /**
+   * Test that when instance is already marked for termination, timeout check is skipped.
+   */
+  public void when_instance_already_marked_for_termination_should_skip_check() throws IOException {
+    String vmConfigName = "imageId";
+    String privateHost = "10.10.10.4";
+    String instanceId = "instanceId";
+
+    OrkaClient orkaClient = this.getOrkaClientMock(privateHost, 22, instanceId);
+
+    // Capture the scheduled Runnable
+    final Runnable[] capturedRunnable = new Runnable[1];
+    ScheduledExecutorService scheduledExecutor = mock(ScheduledExecutorService.class);
+    when(scheduledExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
+      Runnable r = (Runnable) invocation.getArguments()[0];
+      r.run();
+      return CompletableFuture.completedFuture(null);
+    });
+    when(scheduledExecutor.schedule(any(Runnable.class), any(Long.class), any(TimeUnit.class)))
+        .thenAnswer(invocation -> {
+          capturedRunnable[0] = (Runnable) invocation.getArguments()[0];
+          return mock(ScheduledFuture.class);
+        });
+
+    OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(vmConfigName),
+        orkaClient, scheduledExecutor, mock(RemoteAgent.class), mock(SSHUtil.class));
+
+    OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+    assertNotNull(instance);
+
+    // Pre-mark instance for termination (simulating another path marked it)
+    instance.setMarkedForTermination(true);
+
+    // Run the timeout check
+    assertNotNull("Scheduled runnable should be captured", capturedRunnable[0]);
+    capturedRunnable[0].run();
+
+    // Status should remain RUNNING (not changed to ERROR)
+    assertEquals(InstanceStatus.RUNNING, instance.getStatus());
   }
 
   private CloudImage getImage(OrkaCloudClient client) {
