@@ -24,8 +24,7 @@ public class RemoveFailedInstancesTaskTest {
 
     public void when_run_task_and_no_instances_to_terminate_should_keep_running_instances() throws IOException {
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"),
-                mock(OrkaClient.class), mock(ScheduledExecutorService.class),
-                mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(OrkaClient.class), mock(ScheduledExecutorService.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance instance = image.startNewInstance("instanceId");
 
@@ -39,7 +38,7 @@ public class RemoveFailedInstancesTaskTest {
     public void when_run_task_and_one_instance_to_terminate_with_no_vm_should_terminate_instance() throws IOException {
         OrkaClient orkaClient = getOrkaClientMock(existingRunningVMId, false);
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance instance = image.startNewInstance(failedRunningVMId);
         instance.setMarkedForTermination(true);
@@ -57,7 +56,7 @@ public class RemoveFailedInstancesTaskTest {
         deletionResponse.setHttpResponse(new HttpResponse("", 200, true));
         when(orkaClient.deleteVM(failedRunningVMId, "orka-default")).thenReturn(deletionResponse);
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
         failedInstance.setMarkedForTermination(true);
@@ -78,7 +77,7 @@ public class RemoveFailedInstancesTaskTest {
         when(orkaClient.deleteVM(failedRunningVMId, "orka-default")).thenReturn(deletionResponse);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         final OrkaCloudInstance runningInstance = image.startNewInstance(existingRunningVMId);
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
@@ -98,7 +97,7 @@ public class RemoveFailedInstancesTaskTest {
         when(orkaClient.deleteVM(failedRunningVMId, "orka-default")).thenThrow(new IOException());
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
         failedInstance.setMarkedForTermination(true);
@@ -120,7 +119,7 @@ public class RemoveFailedInstancesTaskTest {
         when(orkaClient.deleteVM(failedRunningVMId, "orka-default")).thenReturn(deletionResponse);
 
         OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock("imageId"), orkaClient,
-                mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+                mock(ScheduledExecutorService.class));
         OrkaCloudImage image = (OrkaCloudImage) client.getImages().toArray()[0];
         OrkaCloudInstance failedInstance = image.startNewInstance(failedRunningVMId);
         failedInstance.setMarkedForTermination(true);
