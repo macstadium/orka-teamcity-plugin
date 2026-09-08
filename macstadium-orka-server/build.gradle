@@ -35,5 +35,5 @@ dependencies {
 
 tasks.named('serverPlugin') {
     archiveVersion.set('')
-    archiveBaseName.set('orka-macstadium')
+    archiveBaseName.set('orka-macstadium-beta')
 }

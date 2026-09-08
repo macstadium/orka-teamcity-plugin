@@ -40,7 +40,7 @@ public class OrkaCloudClientFactory implements CloudClientFactory {
 
     @NotNull
     public String getDisplayName() {
-        return "Orka Cloud";
+        return "Orka Cloud Beta";
     }
 
     @Nullable

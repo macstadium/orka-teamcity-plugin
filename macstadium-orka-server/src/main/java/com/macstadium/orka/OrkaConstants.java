@@ -7,7 +7,7 @@ import org.jetbrains.annotations.NotNull;
 
 public class OrkaConstants {
     @NotNull
-    public static final String TYPE = "orka";
+    public static final String TYPE = "orkab";
     @NotNull
     public static final String IMAGES_PROFILE_SETTING = "images";
     @NotNull
