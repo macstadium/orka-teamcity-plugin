@@ -77,6 +77,9 @@
                 <input type="radio" name="prop:${constants.setupMode}" id="${constants.setupMode}-userdata"
                        value="${constants.setupModeUserdata}" data-bind="checked: setupMode"/>
                 <label for="${constants.setupMode}-userdata">Userdata</label>
+                <input type="radio" name="prop:${constants.setupMode}" id="${constants.setupMode}-daemon"
+                       value="${constants.setupModeDaemon}" data-bind="checked: setupMode"/>
+                <label for="${constants.setupMode}-daemon">Daemon</label>
                 <input type="hidden" value="<c:out value="${propertiesBean.properties[constants.setupMode]}"/>" data-bind="initValue: initialSetupMode"/>
                 <span class="smallNote">
                     SSH: the server connects to the VM over SSH to start the agent.
@@ -86,10 +89,16 @@
                     <strong>Apple Silicon (ARM) nodes only</strong> &mdash; userdata is ignored on Intel nodes.
                     Stopping the agent is skipped in this mode; the VM is deleted directly.
                 </span>
+                <span class="smallNote">
+                    Daemon: the VM image starts the agent itself via a LaunchDaemon and the agent reads its
+                    identity from the Orka metadata service. TeamCity only deploys and deletes the VM. Requires the
+                    image to be prepared with <code>install-teamcity-agent-daemon.sh</code>. Stopping the agent is
+                    skipped in this mode too.
+                </span>
             </td>
         </tr>
 
-        <tr>
+        <tr data-bind="visible: !isDaemonSetup()">
             <th><label for="${constants.vmUser}">VM user: <l:star/></label></th>
             <td>
                 <input type="text" name="prop:${constants.vmUser}" id="${constants.vmUser}" class="longField" value="<c:out value="${propertiesBean.properties[constants.vmUser]}"/>" data-bind="initValue: vmUser, textInput: vmUser"/>

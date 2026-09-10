@@ -228,7 +228,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             String userdata = this.isUserdataSetup()
                     ? this.userdataScript.build(image.getId(), image.getUser(), this.agentDirectory, data)
                     : null;
-            DeploymentResponse response = this.deployVM(image.getName(), image.getNamespace(), userdata);
+            Map<String, String> customMetadata = this.isDaemonSetup() ? this.buildCustomMetadata(image, data) : null;
+            DeploymentResponse response = this.deployVM(image.getName(), image.getNamespace(), userdata,
+                    customMetadata);
             if (!response.isSuccessful()) {
                 LOG.debug(String.format("setUpVM deployment errors: %s", response.getMessage()));
                 image.terminateInstance(instance.getInstanceId());
@@ -246,7 +248,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             instance.setHost(host);
             instance.setPort(sshPort);
 
-            if (!this.isUserdataSetup()) {
+            if (this.startsAgentOverSsh()) {
                 LOG.debug("setUpVM waiting for SSH to be enabled");
                 this.waitForVM(host, sshPort);
                 this.remoteAgent.startAgent(instanceId, image.getId(), host, sshPort, image.getUser(),
@@ -273,13 +275,35 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
         }
     }
 
-    private DeploymentResponse deployVM(String vmName, String namespace, String userdata) throws IOException {
-        return userdata == null ? this.orkaClient.deployVM(vmName, namespace)
-                : this.orkaClient.deployVM(vmName, namespace, userdata);
+    private DeploymentResponse deployVM(String vmName, String namespace, String userdata,
+            Map<String, String> customMetadata) throws IOException {
+        return userdata == null && customMetadata == null ? this.orkaClient.deployVM(vmName, namespace)
+                : this.orkaClient.deployVM(vmName, namespace, userdata, customMetadata);
+    }
+
+    private Map<String, String> buildCustomMetadata(OrkaCloudImage image, @Nullable final CloudInstanceUserData data) {
+        Map<String, String> customMetadata = new HashMap<String, String>();
+        customMetadata.put(CommonConstants.IMAGE_ID_METADATA_KEY, image.getId());
+
+        String startingInstanceId = data == null ? null
+                : data.getCustomAgentConfigurationParameters().get(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM);
+        if (StringUtil.isNotEmpty(startingInstanceId)) {
+            customMetadata.put(CommonConstants.STARTING_INSTANCE_ID_METADATA_KEY, startingInstanceId);
+        }
+
+        return customMetadata;
     }
 
     private boolean isUserdataSetup() {
         return OrkaConstants.SETUP_MODE_USERDATA.equals(this.setupMode);
+    }
+
+    private boolean isDaemonSetup() {
+        return OrkaConstants.SETUP_MODE_DAEMON.equals(this.setupMode);
+    }
+
+    private boolean startsAgentOverSsh() {
+        return !this.isUserdataSetup() && !this.isDaemonSetup();
     }
 
     DeletionResponse deleteVM(String vmId, String namespace) throws IOException {
@@ -310,7 +334,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
                 orkaInstance.setStatus(InstanceStatus.SCHEDULED_TO_STOP);
 
-                if (!this.isUserdataSetup()) {
+                if (this.startsAgentOverSsh()) {
                     this.remoteAgent.stopAgent(orkaInstance.getHost(), orkaInstance.getPort(), image.getUser(),
                             image.getPassword(), this.agentDirectory);
                 }

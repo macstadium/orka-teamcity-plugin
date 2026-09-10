@@ -7,6 +7,7 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.macstadium.orka.OrkaConstants;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import jetbrains.buildServer.log.Loggers;
@@ -74,11 +75,12 @@ public class OrkaClient {
     }
 
     public DeploymentResponse deployVM(String vmConfig, String namespace) throws IOException {
-        return this.deployVM(vmConfig, namespace, null);
+        return this.deployVM(vmConfig, namespace, null, null);
     }
 
-    public DeploymentResponse deployVM(String vmConfig, String namespace, String userdata) throws IOException {
-        DeploymentRequest deploymentRequest = new DeploymentRequest(vmConfig, userdata);
+    public DeploymentResponse deployVM(String vmConfig, String namespace, String userdata,
+            Map<String, String> customMetadata) throws IOException {
+        DeploymentRequest deploymentRequest = new DeploymentRequest(vmConfig, userdata, customMetadata);
         String deploymentRequestJson = new Gson().toJson(deploymentRequest);
 
         HttpResponse httpResponse = this.post(

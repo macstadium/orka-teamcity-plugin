@@ -264,6 +264,10 @@ public class OrkaCloudClientTest {
         assertReportsStoppingBeforeDelete(OrkaConstants.SETUP_MODE_USERDATA);
     }
 
+    public void when_terminate_instance_with_daemon_should_report_stopping_before_deleting_vm() throws IOException {
+        assertReportsStoppingBeforeDelete(OrkaConstants.SETUP_MODE_DAEMON);
+    }
+
     private void assertReportsStoppingBeforeDelete(String setupMode) throws IOException {
         String imageId = "imageId";
         OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
@@ -311,7 +315,7 @@ public class OrkaCloudClientTest {
                 null);
         deploymentResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
         when(orkaClient.deployVM(any(), any())).thenReturn(deploymentResponse);
-        when(orkaClient.deployVM(any(), any(), any())).thenReturn(deploymentResponse);
+        when(orkaClient.deployVM(any(), any(), any(), any())).thenReturn(deploymentResponse);
         DeletionResponse deletionResponse = new DeletionResponse("Success");
         deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
         when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);

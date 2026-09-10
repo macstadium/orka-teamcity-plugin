@@ -6,6 +6,66 @@ The plugin provides TeamCity cloud integration with Orka by MacStadium. This all
 
 The plugin uses [gradle plugin][gradle-plugin] to build and package the plugin. For more information, see the gradle plugin [page][gradle-plugin].
 
+## Agent setup modes
+
+The cloud profile picks how the TeamCity agent inside the VM is started and how it learns
+which cloud instance it belongs to. All three produce the same result: an agent that
+registers with `cloud.orka.instance.id` and `cloud.orka.image.id` set, so TeamCity can match
+it to the instance it started.
+
+| Mode | Starts the agent | Carries the identity | Needs SSH | Needs image prep | Stops the agent |
+|---|---|---|---|---|---|
+| SSH | server, over SSH | file SCP'd to `/tmp` | yes | agent installed, `serverUrl` set, SSH on | yes, `agent.sh stop` |
+| Userdata | first-boot script in the VM | script writes the same file | no | same as SSH | no |
+| Daemon | LaunchDaemon in the image | Orka metadata service | no | plus `install-teamcity-agent-daemon.sh` | no |
+
+`serverUrl` must be set in `conf/buildAgent.properties` in every mode — unlike the EC2
+integration, this plugin does not supply it.
+
+### SSH
+
+The original behaviour. The server waits for the VM's SSH port, uploads a metadata file and
+runs `agent.sh start`. On termination it runs `agent.sh stop` before deleting the VM.
+
+### Userdata
+
+The server passes a base64 first-boot script as Orka userdata at deploy time. The script
+reads its own VM name from the metadata service, writes the same metadata file the agent
+plugin already looks for, and starts the agent as the configured VM user. No SSH connection
+is ever made.
+
+Apple Silicon only — userdata is ignored on Intel nodes, and the agent will simply never
+register. Works with images already prepared for SSH mode.
+
+### Daemon
+
+The VM image starts the agent itself, and the agent-side plugin reads its identity from the
+Orka metadata service (`orka_vm_name`, plus `teamcity_image_id` and
+`teamcity_starting_instance_id` passed as custom metadata on deploy). The server only
+deploys and deletes the VM.
+
+Prepare the image once, inside the VM, after installing and connecting the agent:
+
+```bash
+sudo ./scripts/install-teamcity-agent-daemon.sh --agent-dir /Users/admin/BuildAgent --user admin
+```
+
+Then stop the agent, clear `logs/` and `temp/`, remove `name` from `buildAgent.properties`
+and save the VM as an image.
+
+A LaunchDaemon has no GUI session, so iOS Simulator, UI tests and the login keychain do not
+work under it. Those need auto-login plus a LaunchAgent instead. Note that SSH and Userdata
+modes have the same limitation — only auto-login fixes it.
+
+The auth token travels in the VM's custom metadata, which is readable by anyone who can read
+the VM in that namespace, and by anything running inside the VM.
+
+To validate the setup script without installing anything:
+
+```bash
+./scripts/test-install-teamcity-agent-daemon.sh
+```
+
 ## Build requirements
 
 - JDK 11 or later (JDK 11, 17, or 21 recommended)

@@ -39,6 +39,8 @@ public class OrkaConstants {
     @NotNull
     public static final String SETUP_MODE_USERDATA = "userdata";
     @NotNull
+    public static final String SETUP_MODE_DAEMON = "daemon";
+    @NotNull
     public static final int UNLIMITED_INSTANCES = -1;
 
     public String getOrkaEndpoint() {
@@ -83,6 +85,10 @@ public class OrkaConstants {
 
     public String getSetupModeUserdata() {
         return SETUP_MODE_USERDATA;
+    }
+
+    public String getSetupModeDaemon() {
+        return SETUP_MODE_DAEMON;
     }
 
     public String getNamespace() {
