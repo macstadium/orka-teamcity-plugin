@@ -69,17 +69,42 @@
         </tr>
 
         <tr>
-            <th><label for="${constants.vmUser}">VM user: <l:star/></label></th>
+            <th><label for="${constants.setupMode}">Agent setup: <l:star/></label></th>
             <td>
-                <input type="text" name="prop:${constants.vmUser}" id="${constants.vmUser}" class="longField" value="<c:out value="${propertiesBean.properties[constants.vmUser]}"/>" data-bind="initValue: vmUser, textInput: vmUser"/>
-                <span class="error option-error" data-bind="validationMessage: vmUser"></span>
+                <input type="radio" name="prop:${constants.setupMode}" id="${constants.setupMode}-ssh"
+                       value="${constants.setupModeSsh}" data-bind="checked: setupMode"/>
+                <label for="${constants.setupMode}-ssh">SSH</label>
+                <input type="radio" name="prop:${constants.setupMode}" id="${constants.setupMode}-userdata"
+                       value="${constants.setupModeUserdata}" data-bind="checked: setupMode"/>
+                <label for="${constants.setupMode}-userdata">Userdata</label>
+                <input type="hidden" value="<c:out value="${propertiesBean.properties[constants.setupMode]}"/>" data-bind="initValue: initialSetupMode"/>
                 <span class="smallNote">
-                    Specify the user used to SSH to the Orka VM.
+                    SSH: the server connects to the VM over SSH to start the agent.
+                </span>
+                <span class="smallNote">
+                    Userdata: the agent is started by a first-boot script passed to the VM, no SSH connection is made.
+                    <strong>Apple Silicon (ARM) nodes only</strong> &mdash; userdata is ignored on Intel nodes.
+                    Stopping the agent is skipped in this mode; the VM is deleted directly.
                 </span>
             </td>
         </tr>
 
         <tr>
+            <th><label for="${constants.vmUser}">VM user: <l:star/></label></th>
+            <td>
+                <input type="text" name="prop:${constants.vmUser}" id="${constants.vmUser}" class="longField" value="<c:out value="${propertiesBean.properties[constants.vmUser]}"/>" data-bind="initValue: vmUser, textInput: vmUser"/>
+                <span class="error option-error" data-bind="validationMessage: vmUser"></span>
+                <span class="smallNote" data-bind="visible: isSshSetup">
+                    Specify the user used to SSH to the Orka VM.
+                </span>
+                <span class="smallNote" data-bind="visible: !isSshSetup()">
+                    Specify the user the TeamCity agent and its builds run as. The first-boot script runs as root
+                    and switches to this user, so the agent picks up that user's home, PATH and keychain.
+                </span>
+            </td>
+        </tr>
+
+        <tr data-bind="visible: isSshSetup">
             <th><label for="${constants.vmPassword}">VM SSH password: <l:star/></label></th>
             <td>
                 <div>

@@ -33,6 +33,12 @@ public class OrkaConstants {
     @NotNull
     public static final String NODE_MAPPINGS = "cloud.orka.node.mappings";
     @NotNull
+    public static final String SETUP_MODE = "cloud.orka.vm.setup.mode";
+    @NotNull
+    public static final String SETUP_MODE_SSH = "ssh";
+    @NotNull
+    public static final String SETUP_MODE_USERDATA = "userdata";
+    @NotNull
     public static final int UNLIMITED_INSTANCES = -1;
 
     public String getOrkaEndpoint() {
@@ -65,6 +71,18 @@ public class OrkaConstants {
 
     public String getNodeMappings() {
         return NODE_MAPPINGS;
+    }
+
+    public String getSetupMode() {
+        return SETUP_MODE;
+    }
+
+    public String getSetupModeSsh() {
+        return SETUP_MODE_SSH;
+    }
+
+    public String getSetupModeUserdata() {
+        return SETUP_MODE_USERDATA;
     }
 
     public String getNamespace() {

@@ -74,7 +74,11 @@ public class OrkaClient {
     }
 
     public DeploymentResponse deployVM(String vmConfig, String namespace) throws IOException {
-        DeploymentRequest deploymentRequest = new DeploymentRequest(vmConfig);
+        return this.deployVM(vmConfig, namespace, null);
+    }
+
+    public DeploymentResponse deployVM(String vmConfig, String namespace, String userdata) throws IOException {
+        DeploymentRequest deploymentRequest = new DeploymentRequest(vmConfig, userdata);
         String deploymentRequestJson = new Gson().toJson(deploymentRequest);
 
         HttpResponse httpResponse = this.post(
