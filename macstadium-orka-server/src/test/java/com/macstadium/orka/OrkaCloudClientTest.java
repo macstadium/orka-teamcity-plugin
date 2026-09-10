@@ -254,6 +254,42 @@ public class OrkaCloudClientTest {
         assertEquals(privateHost, instance.getHost());
     }
 
+    public void when_terminate_instance_over_ssh_should_report_stopping_before_deleting_vm() throws IOException {
+        assertReportsStoppingBeforeDelete(OrkaConstants.SETUP_MODE_SSH);
+    }
+
+    public void when_terminate_instance_with_userdata_should_report_stopping_before_deleting_vm() throws IOException {
+        // The STOPPING transition used to live inside RemoteAgent.stopAgent, which userdata
+        // setup skips, so TeamCity never saw the instance leave SCHEDULED_TO_STOP.
+        assertReportsStoppingBeforeDelete(OrkaConstants.SETUP_MODE_USERDATA);
+    }
+
+    private void assertReportsStoppingBeforeDelete(String setupMode) throws IOException {
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, setupMode), orkaClient,
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        final OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+
+        final InstanceStatus[] statusWhenDeleting = new InstanceStatus[1];
+        final DeletionResponse deletionResponse = new DeletionResponse("Success");
+        deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.deleteVM(any(), any())).thenAnswer(new Answer<DeletionResponse>() {
+            @Override
+            public DeletionResponse answer(InvocationOnMock invocation) {
+                statusWhenDeleting[0] = instance.getStatus();
+                return deletionResponse;
+            }
+        });
+
+        client.terminateInstance(instance);
+
+        assertEquals(InstanceStatus.STOPPING, statusWhenDeleting[0]);
+        assertEquals(InstanceStatus.STOPPED, instance.getStatus());
+    }
+
     private CloudImage getImage(OrkaCloudClient client) {
         return client.getImages().stream().findFirst().get();
     }
@@ -275,6 +311,7 @@ public class OrkaCloudClientTest {
                 null);
         deploymentResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
         when(orkaClient.deployVM(any(), any())).thenReturn(deploymentResponse);
+        when(orkaClient.deployVM(any(), any(), any())).thenReturn(deploymentResponse);
         DeletionResponse deletionResponse = new DeletionResponse("Success");
         deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
         when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);

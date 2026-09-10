@@ -311,11 +311,12 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                 orkaInstance.setStatus(InstanceStatus.SCHEDULED_TO_STOP);
 
                 if (!this.isUserdataSetup()) {
-                    this.remoteAgent.stopAgent(orkaInstance, image.getId(), orkaInstance.getHost(),
-                            orkaInstance.getPort(), image.getUser(), image.getPassword(), this.agentDirectory);
+                    this.remoteAgent.stopAgent(orkaInstance.getHost(), orkaInstance.getPort(), image.getUser(),
+                            image.getPassword(), this.agentDirectory);
                 }
 
                 LOG.debug("terminateInstance deleting vm");
+                orkaInstance.setStatus(InstanceStatus.STOPPING);
                 DeletionResponse response = this.deleteVM(instance.getInstanceId(), orkaInstance.getNamespace());
                 if (response.isSuccessful()) {
                     orkaInstance.setStatus(InstanceStatus.STOPPED);
