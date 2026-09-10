@@ -50,14 +50,30 @@ Prepare the image once, inside the VM, after installing and connecting the agent
 sudo ./scripts/install-teamcity-agent-daemon.sh --agent-dir /Users/admin/BuildAgent --user admin
 ```
 
-Then stop the agent, clear `logs/` and `temp/`, remove `name` from `buildAgent.properties`
-and save the VM as an image.
+Then stop the agent, clear `logs/` and `temp/`, and strip the identity TeamCity wrote into
+`conf/buildAgent.properties` before saving the VM as an image:
+
+```bash
+sed -i '' -E '/^[[:space:]]*(name|authorizationToken)[[:space:]]*=/d' \
+  /Users/admin/agent/conf/buildAgent.properties
+```
+
+Both lines matter. TeamCity generates the agent name on first start and writes it back to that
+file, and it stores the authorization token there too. If either survives image capture, every VM
+cloned from the image claims the same identity, and the second one to boot is refused with
+*"another agent with the same authorization token and name is registered on the server"* until the
+first disappears.
 
 The daemon runs a wrapper, `/usr/local/libexec/teamcity-agent-service.sh`, rather than
 `agent.sh` directly. `agent.sh start` forks and exits, so launchd would consider the job
 finished and would have nothing to signal at shutdown. The wrapper stays in the foreground
 and traps `SIGTERM`, at which point it runs `agent.sh stop force` so the agent unregisters
 from the server. The plist allows 60 seconds (`ExitTimeOut`) for that to complete.
+
+The wrapper retries `agent.sh start` rather than exiting when it fails, since a dependency may not
+be up yet on first boot, and it skips the start if the agent is already running. `KeepAlive` is set
+to `SuccessfulExit: false` so launchd respawns the wrapper if it dies unexpectedly but leaves it
+alone after a clean stop, which would otherwise restart the agent during shutdown.
 
 This only helps on `launchctl bootout` and real OS shutdowns. Orka's VM delete is a hard
 power-off, so on the normal termination path launchd never runs the stop handler and the

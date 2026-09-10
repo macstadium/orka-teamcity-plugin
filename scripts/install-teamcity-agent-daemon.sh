@@ -19,6 +19,9 @@ WRAPPER="${WRAPPER_DIR}/teamcity-agent-service.sh"
 # launchd SIGKILLs the job this many seconds after SIGTERM, so the agent has this long to
 # unregister from the server.
 EXIT_TIMEOUT=60
+# Respawn only on a failed exit, so the SIGTERM stop path (exit 0) does not get restarted while
+# the VM is shutting down.
+THROTTLE_INTERVAL=30
 UPGRADE_LABEL="jetbrains.teamcity.BuildAgentUpgrade"
 UPGRADE_PLIST_TEMPLATE_SUFFIX="bin/${UPGRADE_LABEL}.plist.dist"
 
@@ -117,6 +120,7 @@ cat > "$WRAPPER" <<WRAPPER_CONTENT
 set -eu
 
 AGENT="${AGENT_DIR}/bin/agent.sh"
+PID_FILE="${AGENT_DIR}/logs/buildAgent.pid"
 
 if [ -z "\${JAVA_HOME:-}" ]; then
     JAVA_HOME="\$(/usr/libexec/java_home 2>/dev/null || true)"
@@ -135,7 +139,20 @@ stop_agent() {
 }
 trap stop_agent TERM INT
 
-"\$AGENT" start
+agent_running() {
+    [ -f "\$PID_FILE" ] && kill -0 "\$(cat "\$PID_FILE" 2>/dev/null)" 2>/dev/null
+}
+
+# A start can fail because a dependency is not up yet on first boot, so keep trying instead of
+# letting set -e kill the daemon for good.
+if agent_running; then
+    echo "agent already running, not starting it again"
+else
+    until "\$AGENT" start; do
+        echo "agent.sh start failed, retrying in 10s" >&2
+        sleep 10
+    done
+fi
 
 # Sleep in the background and wait on it: bash defers traps until the foreground builtin
 # returns, so a plain 'sleep' would delay shutdown by up to the sleep interval.
@@ -167,6 +184,13 @@ cat > "$PLIST" <<PLIST_CONTENT
     <true/>
     <key>RunAtLoad</key>
     <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>${THROTTLE_INTERVAL}</integer>
     <key>ExitTimeOut</key>
     <integer>${EXIT_TIMEOUT}</integer>
     <key>WorkingDirectory</key>
