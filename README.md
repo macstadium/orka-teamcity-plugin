@@ -53,6 +53,25 @@ sudo ./scripts/install-teamcity-agent-daemon.sh --agent-dir /Users/admin/BuildAg
 Then stop the agent, clear `logs/` and `temp/`, remove `name` from `buildAgent.properties`
 and save the VM as an image.
 
+The daemon runs a wrapper, `/usr/local/libexec/teamcity-agent-service.sh`, rather than
+`agent.sh` directly. `agent.sh start` forks and exits, so launchd would consider the job
+finished and would have nothing to signal at shutdown. The wrapper stays in the foreground
+and traps `SIGTERM`, at which point it runs `agent.sh stop force` so the agent unregisters
+from the server. The plist allows 60 seconds (`ExitTimeOut`) for that to complete.
+
+This only helps on `launchctl bootout` and real OS shutdowns. Orka's VM delete is a hard
+power-off, so on the normal termination path launchd never runs the stop handler and the
+agent still disappears without unregistering. TeamCity reports that as *"The cloud image
+instance was not stopped properly"*. Closing that gap needs a graceful guest shutdown from
+Orka before the VM is destroyed.
+
+Exercise the stop path on a running VM without rebooting it:
+
+```bash
+sudo launchctl bootout system/jetbrains.teamcity.BuildAgent
+grep -i unregister /Users/admin/BuildAgent/logs/teamcity-agent.log
+```
+
 A LaunchDaemon has no GUI session, so iOS Simulator, UI tests and the login keychain do not
 work under it. Those need auto-login plus a LaunchAgent instead. Note that SSH and Userdata
 modes have the same limitation — only auto-login fixes it.

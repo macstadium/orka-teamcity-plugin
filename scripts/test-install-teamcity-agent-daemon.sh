@@ -1,5 +1,6 @@
 #!/bin/bash
-# Renders the LaunchDaemon plist against a fake agent installation and validates it.
+# Renders the LaunchDaemon plist and wrapper against a fake agent installation, validates
+# them, and exercises the wrapper's SIGTERM path against a stub agent.
 # Runs without root; nothing is installed.
 
 set -euo pipefail
@@ -42,6 +43,7 @@ TEAMCITY_DAEMON_DRY_RUN_DIR="$PLIST_DIR" "$INSTALLER" \
     --agent-dir "$AGENT_DIR" --user "$AGENT_USER" --group "$AGENT_GROUP" > "${WORK_DIR}/out.log"
 
 PLIST="${PLIST_DIR}/jetbrains.teamcity.BuildAgent.plist"
+WRAPPER="${PLIST_DIR}/teamcity-agent-service.sh"
 UPGRADE_PLIST="${AGENT_DIR}/bin/jetbrains.teamcity.BuildAgentUpgrade.plist.dist"
 
 check "plist is created" "$([ -f "$PLIST" ] && echo true || echo false)"
@@ -56,9 +58,19 @@ check "creates a security session for keychain access" \
     "$([ "$(plutil -extract SessionCreate raw -o - "$PLIST")" = "true" ] && echo true || echo false)"
 check "sets HOME so agent toolchain lookups resolve" \
     "$(plutil -extract EnvironmentVariables.HOME raw -o - "$PLIST" >/dev/null 2>&1 && echo true || echo false)"
-check "launches the agent from the given agent dir" \
-    "$(plutil -extract ProgramArguments.3 raw -o - "$PLIST" | grep -q "^${AGENT_DIR}/bin/agent.sh start$" \
+check "launches the wrapper, not agent.sh directly" \
+    "$(plutil -extract ProgramArguments.2 raw -o - "$PLIST" | grep -q "^${WRAPPER}$" \
         && echo true || echo false)"
+check "gives the agent time to unregister before SIGKILL" \
+    "$([ "$(plutil -extract ExitTimeOut raw -o - "$PLIST")" -ge 30 ] && echo true || echo false)"
+check "wrapper is created and executable" \
+    "$([ -x "$WRAPPER" ] && echo true || echo false)"
+check "wrapper is syntactically valid bash" \
+    "$(bash -n "$WRAPPER" >/dev/null 2>&1 && echo true || echo false)"
+check "wrapper points at the given agent dir" \
+    "$(grep -q "^AGENT=\"${AGENT_DIR}/bin/agent.sh\"$" "$WRAPPER" && echo true || echo false)"
+check "wrapper traps TERM" \
+    "$(grep -q '^trap stop_agent TERM INT$' "$WRAPPER" && echo true || echo false)"
 check "upgrade template gets UserName so upgrades do not run as root" \
     "$([ "$(plutil -extract UserName raw -o - "$UPGRADE_PLIST")" = "$AGENT_USER" ] && echo true || echo false)"
 
@@ -84,6 +96,53 @@ TEAMCITY_DAEMON_DRY_RUN_DIR="$PLIST_DIR" "$INSTALLER" \
 missing_agent_status=$?
 set -e
 check "fails when the agent dir has no agent" "$([ "$missing_agent_status" -ne 0 ] && echo true || echo false)"
+
+# The point of the wrapper: SIGTERM must reach the agent as a stop, not a kill.
+STOP_WORK="${WORK_DIR}/stop-test"
+STOP_AGENT_DIR="${STOP_WORK}/BuildAgent"
+CALL_LOG="${STOP_WORK}/calls.log"
+mkdir -p "${STOP_AGENT_DIR}/bin" "${STOP_AGENT_DIR}/conf" "${STOP_WORK}/out"
+cat > "${STOP_AGENT_DIR}/bin/agent.sh" <<STUB
+#!/bin/sh
+echo "\$@" >> "${CALL_LOG}"
+exit 0
+STUB
+chmod +x "${STOP_AGENT_DIR}/bin/agent.sh"
+printf 'serverUrl=https://teamcity.example.com\n' > "${STOP_AGENT_DIR}/conf/buildAgent.properties"
+TEAMCITY_DAEMON_DRY_RUN_DIR="${STOP_WORK}/out" "$INSTALLER" \
+    --agent-dir "$STOP_AGENT_DIR" --user "$AGENT_USER" --group "$AGENT_GROUP" > /dev/null
+
+bash "${STOP_WORK}/out/teamcity-agent-service.sh" &
+WRAPPER_PID=$!
+
+started="false"
+for _ in $(seq 1 50); do
+    if [ -f "$CALL_LOG" ] && grep -q '^start$' "$CALL_LOG"; then
+        started="true"
+        break
+    fi
+    sleep 0.1
+done
+check "wrapper starts the agent" "$started"
+
+kill -TERM "$WRAPPER_PID" 2>/dev/null || true
+exited="false"
+for _ in $(seq 1 50); do
+    if ! kill -0 "$WRAPPER_PID" 2>/dev/null; then
+        exited="true"
+        break
+    fi
+    sleep 0.1
+done
+wait "$WRAPPER_PID" 2>/dev/null || true
+check "wrapper exits on SIGTERM instead of being killed" "$exited"
+check "wrapper stops the agent on SIGTERM" \
+    "$(grep -q '^stop force$' "$CALL_LOG" && echo true || echo false)"
+
+# Uninstall must take the wrapper with it, or a stale wrapper survives in the image.
+TEAMCITY_DAEMON_DRY_RUN_DIR="$PLIST_DIR" "$INSTALLER" --uninstall > /dev/null
+check "uninstall removes the plist" "$([ ! -f "$PLIST" ] && echo true || echo false)"
+check "uninstall removes the wrapper" "$([ ! -f "$WRAPPER" ] && echo true || echo false)"
 
 echo
 if [ "$failures" -eq 0 ]; then

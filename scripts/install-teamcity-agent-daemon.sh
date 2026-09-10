@@ -1,6 +1,7 @@
 #!/bin/bash
 # Installs a LaunchDaemon that starts the TeamCity build agent on VM boot, running as an
-# unprivileged user, without requiring anyone to log in.
+# unprivileged user, without requiring anyone to log in. The daemon runs a small wrapper so
+# that launchd can stop the agent gracefully on shutdown.
 #
 # Run this INSIDE the Orka VM you are about to save as an image, as root (sudo), after the
 # TeamCity agent is installed and has connected to the server at least once.
@@ -8,10 +9,16 @@
 set -euo pipefail
 
 LABEL="jetbrains.teamcity.BuildAgent"
-# Set to a directory to render the plist there and skip root, chown and launchctl. Test hook only.
+# Set to a directory to render the plist and wrapper there and skip root, chown and
+# launchctl. Test hook only.
 DRY_RUN_DIR="${TEAMCITY_DAEMON_DRY_RUN_DIR:-}"
 PLIST_DIR="${DRY_RUN_DIR:-/Library/LaunchDaemons}"
 PLIST="${PLIST_DIR}/${LABEL}.plist"
+WRAPPER_DIR="${DRY_RUN_DIR:-/usr/local/libexec}"
+WRAPPER="${WRAPPER_DIR}/teamcity-agent-service.sh"
+# launchd SIGKILLs the job this many seconds after SIGTERM, so the agent has this long to
+# unregister from the server.
+EXIT_TIMEOUT=60
 UPGRADE_LABEL="jetbrains.teamcity.BuildAgentUpgrade"
 UPGRADE_PLIST_TEMPLATE_SUFFIX="bin/${UPGRADE_LABEL}.plist.dist"
 
@@ -23,7 +30,7 @@ Usage: sudo $0 --agent-dir <path> --user <username> [--group <groupname>] [--uni
                (for example /Users/admin/BuildAgent)
   --user       User the agent process runs as (for example admin)
   --group      Primary group for that user (default: staff)
-  --uninstall  Remove the LaunchDaemon instead of installing it
+  --uninstall  Remove the LaunchDaemon and wrapper instead of installing them
 
 The agent must already be installed and configured: conf/buildAgent.properties needs a
 valid serverUrl, since the Orka plugin does not supply one.
@@ -53,11 +60,17 @@ fi
 
 if [ "$UNINSTALL" = "true" ]; then
     if [ -f "$PLIST" ]; then
-        launchctl bootout "system/${LABEL}" 2>/dev/null || true
+        if [ -z "$DRY_RUN_DIR" ]; then
+            launchctl bootout "system/${LABEL}" 2>/dev/null || true
+        fi
         rm -f "$PLIST"
         echo "Removed ${PLIST}"
     else
         echo "Nothing to remove: ${PLIST} does not exist"
+    fi
+    if [ -f "$WRAPPER" ]; then
+        rm -f "$WRAPPER"
+        echo "Removed ${WRAPPER}"
     fi
     exit 0
 fi
@@ -93,6 +106,48 @@ LOG_DIR="${AGENT_DIR}/logs"
 mkdir -p "$LOG_DIR"
 if [ -z "$DRY_RUN_DIR" ]; then
     chown -R "${AGENT_USER}:${AGENT_GROUP}" "$AGENT_DIR"
+    mkdir -p "$WRAPPER_DIR"
+fi
+
+cat > "$WRAPPER" <<WRAPPER_CONTENT
+#!/bin/bash
+# agent.sh start forks and exits, so launchd would treat the job as finished and would have
+# nothing left to signal at shutdown. Staying in the foreground keeps the daemon alive and
+# gives launchd something to send SIGTERM to, which is what lets the agent unregister.
+set -eu
+
+AGENT="${AGENT_DIR}/bin/agent.sh"
+
+if [ -z "\${JAVA_HOME:-}" ]; then
+    JAVA_HOME="\$(/usr/libexec/java_home 2>/dev/null || true)"
+    if [ -n "\$JAVA_HOME" ]; then
+        export JAVA_HOME
+    fi
+fi
+
+stop_agent() {
+    trap '' TERM INT
+    # 'stop force' rather than 'stop': the VM is being destroyed anyway, and waiting for the
+    # running build to finish risks hitting launchd's ExitTimeOut before the agent has
+    # unregistered, which is the one thing this wrapper exists to do.
+    "\$AGENT" stop force
+    exit 0
+}
+trap stop_agent TERM INT
+
+"\$AGENT" start
+
+# Sleep in the background and wait on it: bash defers traps until the foreground builtin
+# returns, so a plain 'sleep' would delay shutdown by up to the sleep interval.
+while true; do
+    sleep 5 &
+    wait \$! || true
+done
+WRAPPER_CONTENT
+
+chmod 755 "$WRAPPER"
+if [ -z "$DRY_RUN_DIR" ]; then
+    chown root:wheel "$WRAPPER"
 fi
 
 cat > "$PLIST" <<PLIST_CONTENT
@@ -112,6 +167,8 @@ cat > "$PLIST" <<PLIST_CONTENT
     <true/>
     <key>RunAtLoad</key>
     <true/>
+    <key>ExitTimeOut</key>
+    <integer>${EXIT_TIMEOUT}</integer>
     <key>WorkingDirectory</key>
     <string>${AGENT_DIR}</string>
     <key>EnvironmentVariables</key>
@@ -125,8 +182,7 @@ cat > "$PLIST" <<PLIST_CONTENT
     <array>
         <string>/bin/bash</string>
         <string>--login</string>
-        <string>-c</string>
-        <string>${AGENT_DIR}/bin/agent.sh start</string>
+        <string>${WRAPPER}</string>
     </array>
     <key>StandardOutPath</key>
     <string>${LOG_DIR}/launchd.out.log</string>
@@ -164,7 +220,7 @@ PYTHON
 fi
 
 if [ -n "$DRY_RUN_DIR" ]; then
-    echo "Dry run: rendered ${PLIST}, skipped launchctl."
+    echo "Dry run: rendered ${PLIST} and ${WRAPPER}, skipped launchctl."
     exit 0
 fi
 
@@ -173,13 +229,21 @@ launchctl bootstrap system "$PLIST"
 
 echo
 echo "Installed ${PLIST}"
-echo "The agent will start as '${AGENT_USER}' on every boot."
+echo "Installed ${WRAPPER}"
+echo "The agent will start as '${AGENT_USER}' on every boot and unregister on shutdown."
 echo
 echo "Verify with:  sudo launchctl print system/${LABEL} | head -20"
 echo "Agent log:    ${LOG_DIR}/teamcity-agent.log"
+echo "Wrapper log:  ${LOG_DIR}/launchd.out.log"
+echo
+echo "Test the stop path without rebooting:"
+echo "  sudo launchctl bootout system/${LABEL}"
+echo "  grep -i unregister ${LOG_DIR}/teamcity-agent.log"
 echo
 echo "Next: stop the agent, clear ${AGENT_DIR}/logs and ${AGENT_DIR}/temp, remove 'name' from"
 echo "${PROPERTIES}, then save the VM as an Orka image."
 echo
 echo "NOTE: a LaunchDaemon has no GUI session, so iOS Simulator, UI tests and the login"
 echo "      keychain will not work. Those need auto-login plus a LaunchAgent instead."
+echo "NOTE: Orka's VM delete is a hard power-off, so launchd never runs the stop path on"
+echo "      delete. This only helps on 'launchctl bootout' and real OS shutdowns."
