@@ -39,14 +39,35 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
 
   self.vmName = ko.observable().extend({ required: true });
   self.currentVm = ko.observable().extend({ required: true });
-  self.vmUser = ko.observable().extend({ required: true });
-  self.vmPassword = ko.observable().extend({ required: true });
+  self.setupMode = ko.observable("ssh");
+  self.initialSetupMode = ko.observable();
+
+  self.initialSetupMode.subscribe(function (data) {
+    self.setupMode(data || "ssh");
+  });
+
+  self.isSshSetup = ko.computed(function () {
+    return self.setupMode() === "ssh";
+  });
+
+  self.isDaemonSetup = ko.computed(function () {
+    return self.setupMode() === "daemon";
+  });
+
+  self.vmUser = ko.observable().extend({
+    required: { onlyIf: function () { return !self.isDaemonSetup(); } },
+  });
+  self.vmPassword = ko.observable().extend({
+    required: { onlyIf: self.isSshSetup },
+  });
 
   self.agentPools = ko.observableArray([]);
   self.agentPoolId = ko.observable().extend({ required: true });
   self.currentAgentPoolId = ko.observable();
 
-  self.agentDirectory = ko.observable().extend({ required: true });
+  self.agentDirectory = ko.observable().extend({
+    required: { onlyIf: function () { return !self.isDaemonSetup(); } },
+  });
 
   self.showMappings = ko.observable(false);
   self.initialNodeMappings = ko.observable();
