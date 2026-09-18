@@ -14,4 +14,5 @@ dependencies {
     provided "org.jetbrains.teamcity:cloud-shared:$teamcityVersion"
     provided "org.jetbrains.teamcity.internal:agent:$teamcityVersion"
     testImplementation "org.jetbrains.teamcity:tests-support:$teamcityVersion"
+    testImplementation "org.mockito:mockito-core:5.8.0"
 }

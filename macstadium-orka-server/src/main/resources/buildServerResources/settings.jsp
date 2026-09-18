@@ -69,6 +69,28 @@
         </tr>
 
         <tr>
+            <th><label for="${constants.setupMode}">Agent setup: <l:star/></label></th>
+            <td>
+                <input type="radio" name="prop:${constants.setupMode}" id="${constants.setupMode}-ssh"
+                       value="${constants.setupModeSsh}" data-bind="checked: setupMode"/>
+                <label for="${constants.setupMode}-ssh">SSH</label>
+                <input type="radio" name="prop:${constants.setupMode}" id="${constants.setupMode}-daemon"
+                       value="${constants.setupModeDaemon}" data-bind="checked: setupMode"/>
+                <label for="${constants.setupMode}-daemon">Daemon</label>
+                <input type="hidden" value="<c:out value="${propertiesBean.properties[constants.setupMode]}"/>" data-bind="initValue: initialSetupMode"/>
+                <span class="smallNote">
+                    SSH: the server connects to the VM over SSH to start the agent.
+                </span>
+                <span class="smallNote">
+                    Daemon: the VM image starts the agent itself via a LaunchDaemon and the agent reads its
+                    identity from the Orka metadata service. TeamCity only deploys and deletes the VM. Requires the
+                    image to be prepared with <code>install-teamcity-agent-daemon.sh</code>. Stopping the agent is
+                    skipped in this mode.
+                </span>
+            </td>
+        </tr>
+
+        <tr data-bind="visible: isSshSetup">
             <th><label for="${constants.vmUser}">VM user: <l:star/></label></th>
             <td>
                 <input type="text" name="prop:${constants.vmUser}" id="${constants.vmUser}" class="longField" value="<c:out value="${propertiesBean.properties[constants.vmUser]}"/>" data-bind="initValue: vmUser, textInput: vmUser"/>
@@ -79,7 +101,7 @@
             </td>
         </tr>
 
-        <tr>
+        <tr data-bind="visible: isSshSetup">
             <th><label for="${constants.vmPassword}">VM SSH password: <l:star/></label></th>
             <td>
                 <div>
@@ -114,7 +136,7 @@
             </td>
         </tr>
 
-        <tr class="advancedSetting">
+        <tr class="advancedSetting" data-bind="visible: isSshSetup">
             <th><label for="${constants.agentDirectory}">Agent directory:</label></th>
             <td>
                 <input type="text" name="prop:${constants.agentDirectory}" id="${constants.agentDirectory}" class="longField" value="<c:out value="${propertiesBean.properties[constants.agentDirectory]}"/>" data-bind="initValue: agentDirectory, textInput: agentDirectory"/>
