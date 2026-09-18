@@ -27,8 +27,6 @@ public class VMMetadataClient {
     }
 
     public String getValue(String key) throws IOException {
-        // The metadata service answers 200 even for "key not found", so the payload shape,
-        // not the status code, decides whether the key resolved.
         return parseValue(this.get(String.format("%s/%s", this.endpoint, key)));
     }
 
@@ -165,14 +163,23 @@ public class VMMetadataClient {
         connection.setConnectTimeout(TIMEOUT);
         connection.setReadTimeout(TIMEOUT);
         connection.setRequestMethod("GET");
-        try (InputStream stream = connection.getInputStream()) {
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            byte[] chunk = new byte[4096];
-            int read;
-            while ((read = stream.read(chunk)) != -1) {
-                buffer.write(chunk, 0, read);
+        try {
+            // orka-vm-metadata answers an unknown key with 400, which is the service's verdict on
+            // the key rather than a failure to answer. Only 5xx and connection errors, which
+            // getInputStream surfaces as IOException, count as no answer.
+            int status = connection.getResponseCode();
+            if (status >= 400 && status < 500) {
+                return null;
             }
-            return new String(buffer.toByteArray(), StandardCharsets.UTF_8);
+            try (InputStream stream = connection.getInputStream()) {
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                byte[] chunk = new byte[4096];
+                int read;
+                while ((read = stream.read(chunk)) != -1) {
+                    buffer.write(chunk, 0, read);
+                }
+                return new String(buffer.toByteArray(), StandardCharsets.UTF_8);
+            }
         } finally {
             connection.disconnect();
         }

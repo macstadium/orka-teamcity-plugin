@@ -50,12 +50,8 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
     return self.setupMode() === "ssh";
   });
 
-  self.isDaemonSetup = ko.computed(function () {
-    return self.setupMode() === "daemon";
-  });
-
   self.vmUser = ko.observable().extend({
-    required: { onlyIf: function () { return !self.isDaemonSetup(); } },
+    required: { onlyIf: self.isSshSetup },
   });
   self.vmPassword = ko.observable().extend({
     required: { onlyIf: self.isSshSetup },
@@ -66,7 +62,7 @@ function OrkaImagesViewModel(BS, $F, ko, $, config) {
   self.currentAgentPoolId = ko.observable();
 
   self.agentDirectory = ko.observable().extend({
-    required: { onlyIf: function () { return !self.isDaemonSetup(); } },
+    required: { onlyIf: self.isSshSetup },
   });
 
   self.showMappings = ko.observable(false);

@@ -41,6 +41,11 @@ reads its identity from the Orka metadata service (`orka_vm_name`, plus `teamcit
 and `teamcity_starting_instance_id` passed as custom metadata on deploy). The server only
 deploys and deletes the VM.
 
+Because nothing connects into the VM, this mode also works with FileVault turned on in the
+image. The disk still has to be unlocked after the VM boots — by someone over VNC or by
+something you set up — since a LaunchDaemon only runs once the volume is unlocked and macOS has
+booted. The plugin does not unlock it.
+
 **orka-vm-tools is required in the image.** It serves the metadata service on the link-local
 address, which is the only thing carrying the agent's identity in this mode; without it the agent
 boots, finds nothing, and leaves itself unconfigured. It ships in the default images MacStadium
@@ -109,9 +114,18 @@ alone after a clean stop, which would otherwise restart the agent during shutdow
 
 This only helps on `launchctl bootout` and real OS shutdowns. Orka's VM delete is a hard
 power-off, so on the normal termination path launchd never runs the stop handler and the
-agent still disappears without unregistering. TeamCity reports that as *"The cloud image
-instance was not stopped properly"*. Closing that gap needs a graceful guest shutdown from
-Orka before the VM is destroyed.
+agent still disappears without unregistering. TeamCity surfaces that as a health warning on
+the image:
+
+> The cloud image instance was not stopped properly. The respective build agent will continue
+> being registered in TeamCity until the timeout and therefore might get assigned new builds.
+
+Expect it on every daemon-mode termination. In idle-termination testing nothing followed from
+it and the agent dropped off the server promptly. Terminating an agent mid-build has not been
+validated; it costs a truncated build log, lost in-flight artifact uploads and a build failing as
+disconnected, which is the same exposure SSH mode has whenever its best-effort stop fails.
+Closing the gap properly needs a graceful guest shutdown from Orka before the VM is destroyed,
+at which point the stop handler above starts working with no plugin change.
 
 Exercise the stop path on a running VM without rebooting it, again from inside the VM:
 

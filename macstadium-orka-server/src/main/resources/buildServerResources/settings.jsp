@@ -90,7 +90,7 @@
             </td>
         </tr>
 
-        <tr data-bind="visible: !isDaemonSetup()">
+        <tr data-bind="visible: isSshSetup">
             <th><label for="${constants.vmUser}">VM user: <l:star/></label></th>
             <td>
                 <input type="text" name="prop:${constants.vmUser}" id="${constants.vmUser}" class="longField" value="<c:out value="${propertiesBean.properties[constants.vmUser]}"/>" data-bind="initValue: vmUser, textInput: vmUser"/>
@@ -136,7 +136,7 @@
             </td>
         </tr>
 
-        <tr class="advancedSetting">
+        <tr class="advancedSetting" data-bind="visible: isSshSetup">
             <th><label for="${constants.agentDirectory}">Agent directory:</label></th>
             <td>
                 <input type="text" name="prop:${constants.agentDirectory}" id="${constants.agentDirectory}" class="longField" value="<c:out value="${propertiesBean.properties[constants.agentDirectory]}"/>" data-bind="initValue: agentDirectory, textInput: agentDirectory"/>

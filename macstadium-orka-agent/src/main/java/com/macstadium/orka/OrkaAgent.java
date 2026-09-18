@@ -7,6 +7,7 @@ import java.io.FileFilter;
 import java.io.IOException;
 import java.util.List;
 
+import jetbrains.buildServer.Used;
 import jetbrains.buildServer.agent.BuildAgentConfigurationEx;
 import jetbrains.buildServer.log.Loggers;
 import jetbrains.buildServer.util.FileUtil;
@@ -25,17 +26,22 @@ public class OrkaAgent {
     // asking again cannot change what the service holds.
     private static final int METADATA_ATTEMPTS = 2;
 
-    private final VMMetadataClient metadataClient = new VMMetadataClient();
+    private final VMMetadataClient metadataClient;
 
     public OrkaAgent(@NotNull final BuildAgentConfigurationEx configuration) throws IOException {
-        super();
+        this(configuration, new VMMetadataClient(), new File("/tmp/"), new File("").getAbsoluteFile());
+    }
+
+    @Used("Tests")
+    OrkaAgent(BuildAgentConfigurationEx configuration, VMMetadataClient metadataClient, File tempDir,
+            File currentDir) throws IOException {
+        this.metadataClient = metadataClient;
         LOG.info("OrkaAgent plugin initializing...");
 
         FileFilter filter = this.getFilter(CommonConstants.METADATA_FILE_PREFIX);
-        File currentDir = new File("").getAbsoluteFile();
 
         LOG.info("OrkaAgent plugin check temp dir");
-        File tempMetadataFile = FileUtil.findFile(filter, new File("/tmp/"));
+        File tempMetadataFile = FileUtil.findFile(filter, tempDir);
         File metadataFile = tempMetadataFile;
         if (metadataFile == null) {
             LOG.info("OrkaAgent plugin check current dir");
@@ -57,8 +63,10 @@ public class OrkaAgent {
     }
 
     private void updateConfigurationFromMetadataService(BuildAgentConfigurationEx configuration) {
-        String instanceId = this.waitForValue(CommonConstants.VM_NAME_METADATA_KEY);
-        String imageId = this.metadataClient.getValue(CommonConstants.IMAGE_ID_METADATA_KEY, METADATA_ATTEMPTS);
+        // Waiting on the custom key rather than orka_vm_name proves the deploy's metadata landed,
+        // not just that the listener is up.
+        String imageId = this.waitForValue(CommonConstants.IMAGE_ID_METADATA_KEY);
+        String instanceId = this.metadataClient.getValue(CommonConstants.VM_NAME_METADATA_KEY, METADATA_ATTEMPTS);
 
         if (isEmpty(instanceId) || isEmpty(imageId)) {
             // The VM this runs on is deleted shortly after, so this line is the only account of

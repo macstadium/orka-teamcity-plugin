@@ -28,7 +28,8 @@ public class VMMetadataClientTest {
     }
 
     public void when_parse_error_response_should_return_null() {
-        // The metadata service answers 200 with this body when the key is unknown.
+        // The service sends this body with a 400, which get() already turns into null; this
+        // covers a 200 that carries no value at all.
         assertNull(VMMetadataClient.parseValue("{\"error\":\"Unable to find metadata value by provided key x\"}"));
     }
 
@@ -130,7 +131,7 @@ public class VMMetadataClientTest {
         AtomicInteger calls = new AtomicInteger();
         HttpServer server = this.startServer(exchange -> {
             calls.incrementAndGet();
-            this.respond(exchange, 200, "{\"error\":\"Unable to find metadata value by provided key x\"}");
+            this.respond(exchange, 400, "{\"error\":\"Unable to find metadata value by provided key x\"}");
         });
 
         try {
@@ -185,7 +186,7 @@ public class VMMetadataClientTest {
         AtomicInteger calls = new AtomicInteger();
         HttpServer server = this.startServer(exchange -> {
             calls.incrementAndGet();
-            this.respond(exchange, 200, "{\"error\":\"Unable to find metadata value by provided key x\"}");
+            this.respond(exchange, 400, "{\"error\":\"Unable to find metadata value by provided key x\"}");
         });
 
         try {
@@ -223,7 +224,7 @@ public class VMMetadataClientTest {
         AtomicInteger calls = new AtomicInteger();
         HttpServer server = this.startServer(exchange -> {
             calls.incrementAndGet();
-            this.respond(exchange, 200, "{\"error\":\"Unable to find metadata value by provided key x\"}");
+            this.respond(exchange, 400, "{\"error\":\"Unable to find metadata value by provided key x\"}");
         });
 
         try {
