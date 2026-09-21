@@ -1,6 +1,7 @@
 package com.macstadium.orka;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -8,6 +9,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.macstadium.orka.client.DeletionResponse;
@@ -17,6 +20,7 @@ import com.macstadium.orka.client.OrkaClient;
 import com.macstadium.orka.client.VMResponse;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -24,9 +28,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 
 import jetbrains.buildServer.clouds.CloudImage;
+import jetbrains.buildServer.clouds.CloudInstanceUserData;
 import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.serverSide.AgentDescription;
 
+import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.testng.annotations.Test;
@@ -254,6 +260,124 @@ public class OrkaCloudClientTest {
         assertEquals(privateHost, instance.getHost());
     }
 
+    public void when_terminate_instance_over_ssh_should_report_stopping_before_deleting_vm() throws IOException {
+        assertReportsStoppingBeforeDelete(OrkaConstants.SETUP_MODE_SSH);
+    }
+
+    public void when_terminate_instance_with_daemon_should_report_stopping_before_deleting_vm() throws IOException {
+        assertReportsStoppingBeforeDelete(OrkaConstants.SETUP_MODE_DAEMON);
+    }
+
+    public void when_start_new_instance_with_daemon_should_skip_ssh_and_send_custom_metadata() throws IOException {
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        RemoteAgent remoteAgent = mock(RemoteAgent.class);
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, OrkaConstants.SETUP_MODE_DAEMON), orkaClient,
+                this.getScheduledExecutorService(), remoteAgent, mock(SSHUtil.class));
+
+        CloudInstanceUserData data = mock(CloudInstanceUserData.class);
+        when(data.getCustomAgentConfigurationParameters()).thenReturn(
+                Collections.singletonMap(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM, "startingId"));
+
+        client.startNewInstance(this.getImage(client), data);
+
+        verify(remoteAgent, never()).startAgent(any(), any(), any(), anyInt(), any(), any(), any(), any());
+        ArgumentCaptor<Map<String, String>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(orkaClient).deployVM(any(), any(), metadata.capture());
+        assertEquals(imageId, metadata.getValue().get(CommonConstants.IMAGE_ID_METADATA_KEY));
+        // The starting instance id is what TeamCity matches the registering agent against. Without
+        // it the server waits out the whole timeout and kills the instance, with nothing in the log
+        // to say the id never travelled.
+        assertEquals("startingId", metadata.getValue().get(CommonConstants.STARTING_INSTANCE_ID_METADATA_KEY));
+    }
+
+    public void when_start_new_instance_with_daemon_and_no_user_data_should_omit_starting_instance_id()
+            throws IOException {
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, OrkaConstants.SETUP_MODE_DAEMON), orkaClient,
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        client.startNewInstance(this.getImage(client), null);
+
+        ArgumentCaptor<Map<String, String>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(orkaClient).deployVM(any(), any(), metadata.capture());
+        // Absent, not the string "null": the agent treats any non-empty value as a real id.
+        assertFalse(metadata.getValue().containsKey(CommonConstants.STARTING_INSTANCE_ID_METADATA_KEY));
+    }
+
+    public void when_setup_mode_is_unset_should_behave_exactly_like_ssh() throws IOException {
+        // A profile saved before daemon mode shipped has no setupMode parameter at all, so
+        // getParameter returns null. That must keep using SSH and the two-argument deploy.
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        RemoteAgent remoteAgent = mock(RemoteAgent.class);
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId, null, null),
+                orkaClient, this.getScheduledExecutorService(), remoteAgent, mock(SSHUtil.class));
+
+        client.startNewInstance(this.getImage(client), null);
+
+        verify(orkaClient).deployVM(any(), any());
+        verify(orkaClient, never()).deployVM(any(), any(), any());
+        verify(remoteAgent).startAgent(any(), any(), any(), anyInt(), any(), any(), any(), any());
+    }
+
+    public void when_terminate_instance_with_daemon_should_not_stop_agent_over_ssh() throws IOException {
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        RemoteAgent remoteAgent = mock(RemoteAgent.class);
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, OrkaConstants.SETUP_MODE_DAEMON), orkaClient,
+                this.getScheduledExecutorService(), remoteAgent, mock(SSHUtil.class));
+
+        OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+        client.terminateInstance(instance);
+
+        verify(remoteAgent, never()).stopAgent(any(), anyInt(), any(), any(), any());
+    }
+
+    public void when_start_new_instance_over_ssh_should_use_two_argument_deploy() throws IOException {
+        // Pins the backward-compatibility promise: an SSH profile's deploy payload must
+        // stay byte-identical to before daemon mode existed, not merely accept a null
+        // customMetadata on the three-argument overload.
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        OrkaCloudClient client = new OrkaCloudClient(Utils.getCloudClientParametersMock(imageId), orkaClient,
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        client.startNewInstance(this.getImage(client), null);
+
+        verify(orkaClient).deployVM(any(), any());
+    }
+
+    private void assertReportsStoppingBeforeDelete(String setupMode) throws IOException {
+        String imageId = "imageId";
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, setupMode), orkaClient,
+                this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        final OrkaCloudInstance instance = (OrkaCloudInstance) client.startNewInstance(this.getImage(client), null);
+
+        final InstanceStatus[] statusWhenDeleting = new InstanceStatus[1];
+        final DeletionResponse deletionResponse = new DeletionResponse("Success");
+        deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
+        when(orkaClient.deleteVM(any(), any())).thenAnswer(new Answer<DeletionResponse>() {
+            @Override
+            public DeletionResponse answer(InvocationOnMock invocation) {
+                statusWhenDeleting[0] = instance.getStatus();
+                return deletionResponse;
+            }
+        });
+
+        client.terminateInstance(instance);
+
+        assertEquals(InstanceStatus.STOPPING, statusWhenDeleting[0]);
+        assertEquals(InstanceStatus.STOPPED, instance.getStatus());
+    }
+
     private CloudImage getImage(OrkaCloudClient client) {
         return client.getImages().stream().findFirst().get();
     }
@@ -275,6 +399,7 @@ public class OrkaCloudClientTest {
                 null);
         deploymentResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
         when(orkaClient.deployVM(any(), any())).thenReturn(deploymentResponse);
+        when(orkaClient.deployVM(any(), any(), any())).thenReturn(deploymentResponse);
         DeletionResponse deletionResponse = new DeletionResponse("Success");
         deletionResponse.setHttpResponse(new HttpResponse("instanceId", 200, true));
         when(orkaClient.deleteVM(any(), any())).thenReturn(deletionResponse);

@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import jetbrains.buildServer.clouds.CloudInstanceUserData;
-import jetbrains.buildServer.clouds.InstanceStatus;
 import jetbrains.buildServer.log.Loggers;
 import jetbrains.buildServer.util.FileUtil;
 
@@ -56,14 +55,12 @@ public class RemoteAgent {
         LOG.debug("startAgentOnVM completed.");
     }
 
-    public void stopAgent(OrkaCloudInstance orkaInstance, String imageId, String host, int sshPort, String sshUser,
-            String sshPassword, String agentDirectory) {
+    public void stopAgent(String host, int sshPort, String sshUser, String sshPassword, String agentDirectory) {
 
         LOG.debug("stopAgentOnVM starting...");
 
         try (SSHClient ssh = new SSHClient()) {
             this.initSSHClient(ssh, host, sshPort, sshUser, sshPassword);
-            orkaInstance.setStatus(InstanceStatus.STOPPING);
             try (Session session = ssh.startSession()) {
                 LOG.debug("Executing SSH stop command...");
 

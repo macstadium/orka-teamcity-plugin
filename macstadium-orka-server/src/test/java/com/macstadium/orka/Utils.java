@@ -19,7 +19,13 @@ public class Utils {
     }
 
     public static CloudClientParameters getCloudClientParametersMock(String imageId, String nodeMappings) {
+        return getCloudClientParametersMock(imageId, nodeMappings, OrkaConstants.SETUP_MODE_SSH);
+    }
+
+    public static CloudClientParameters getCloudClientParametersMock(String imageId, String nodeMappings,
+            String setupMode) {
         final Map<String, String> params = new HashMap<String, String>();
+        params.put(OrkaConstants.SETUP_MODE, setupMode);
         params.put(OrkaConstants.AGENT_DIRECTORY, "dir");
         params.put(OrkaConstants.ORKA_ENDPOINT, "endpoint");
         params.put(OrkaConstants.TOKEN, "token");
