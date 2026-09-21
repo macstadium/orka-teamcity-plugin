@@ -46,7 +46,7 @@ public class OrkaAgentTest {
         verify(this.configuration).addConfigurationParameter(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM,
                 "starting-1");
         assertTrue(new File(this.currentDir, CommonConstants.METADATA_FILE_PREFIX).exists());
-        verify(this.metadataClient, never()).waitForFirstResponse(anyString(), anyLong(), anyLong());
+        verify(this.metadataClient, never()).waitForValue(anyString(), anyLong(), anyLong());
     }
 
     public void when_metadata_file_in_current_dir_should_configure_from_it() throws Exception {
@@ -58,7 +58,7 @@ public class OrkaAgentTest {
         verify(this.configuration).addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, "image-1");
         verify(this.configuration, never()).addConfigurationParameter(
                 eq(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM), anyString());
-        verify(this.metadataClient, never()).waitForFirstResponse(anyString(), anyLong(), anyLong());
+        verify(this.metadataClient, never()).waitForValue(anyString(), anyLong(), anyLong());
     }
 
     public void when_no_metadata_file_should_configure_from_the_metadata_service() throws Exception {
@@ -100,7 +100,7 @@ public class OrkaAgentTest {
 
     private void stubMetadataService(String instanceId, String imageId, String startingInstanceId)
             throws Exception {
-        when(this.metadataClient.waitForFirstResponse(anyString(), anyLong(), anyLong())).thenReturn(imageId);
+        when(this.metadataClient.waitForValue(anyString(), anyLong(), anyLong())).thenReturn(imageId);
         when(this.metadataClient.getValue(eq(CommonConstants.VM_NAME_METADATA_KEY), anyInt()))
                 .thenReturn(instanceId);
         when(this.metadataClient.getValue(eq(CommonConstants.STARTING_INSTANCE_ID_METADATA_KEY), anyInt()))

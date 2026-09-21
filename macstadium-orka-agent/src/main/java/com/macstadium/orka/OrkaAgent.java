@@ -97,7 +97,7 @@ public class OrkaAgent {
 
     private String waitForValue(String key) {
         try {
-            return this.metadataClient.waitForFirstResponse(key, METADATA_WAIT, METADATA_RETRY_INTERVAL);
+            return this.metadataClient.waitForValue(key, METADATA_WAIT, METADATA_RETRY_INTERVAL);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             return null;

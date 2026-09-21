@@ -98,7 +98,7 @@ public class VMMetadataClientTest {
             // between attempts, so a read that never returns blocks the loop forever.
             long started = System.nanoTime();
             assertNull(new VMMetadataClient(this.endpointOf(server))
-                    .waitForFirstResponse("orka_vm_name", 1, 1));
+                    .waitForValue("orka_vm_name", 1, 1));
             long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
             assertTrue(String.format("waited %dms, expected the read timeout to cap it", elapsedMillis),
                     elapsedMillis < 5 * 1000);
@@ -110,7 +110,7 @@ public class VMMetadataClientTest {
     public void when_the_endpoint_is_unreachable_should_return_null() throws Exception {
         // A VM whose image was never prepped for daemon mode: nothing listening, no exception out.
         assertNull(new VMMetadataClient("http://127.0.0.1:1/metadata")
-                .waitForFirstResponse("orka_vm_name", 200, 1));
+                .waitForValue("orka_vm_name", 200, 1));
     }
 
     public void when_the_daemon_key_is_present_should_return_it() throws Exception {
@@ -120,14 +120,36 @@ public class VMMetadataClientTest {
 
         try {
             assertEquals("image-abc123", new VMMetadataClient(this.endpointOf(server))
-                    .waitForFirstResponse("teamcity_image_id", 5000, 200));
+                    .waitForValue("teamcity_image_id", 5000, 200));
         } finally {
             server.stop(0);
         }
     }
 
     @Test(timeOut = 30000)
-    public void when_the_service_answers_without_the_daemon_key_should_not_wait_any_further() throws Exception {
+    public void when_the_key_arrives_after_the_listener_should_keep_polling_until_it_does() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        HttpServer server = this.startServer(exchange -> {
+            // orka-vm-tools answers 400 from the moment its listener is up until the engine's
+            // metadata reply lands, which is the window a daemon-mode boot most often hits.
+            if (calls.incrementAndGet() < 3) {
+                this.respond(exchange, 400, "{\"error\":\"Unable to find metadata value by provided key x\"}");
+            } else {
+                this.respond(exchange, 200, "{\"value\":\"image-abc123\"}");
+            }
+        });
+
+        try {
+            assertEquals("image-abc123", new VMMetadataClient(this.endpointOf(server))
+                    .waitForValue("teamcity_image_id", 5000, 50));
+            assertEquals("expected polling to continue past the early 400s", 3, calls.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test(timeOut = 30000)
+    public void when_the_key_never_arrives_should_stop_at_the_wait_budget() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         HttpServer server = this.startServer(exchange -> {
             calls.incrementAndGet();
@@ -135,21 +157,15 @@ public class VMMetadataClientTest {
         });
 
         try {
-            // An SSH-mode VM on a host whose metadata service is up. The service has spoken and it
-            // did not name a TeamCity image, which settles the mode: the agent takes the local file
-            // path from here. Polling on instead would charge every SSH-mode boot the full budget
-            // waiting for a key that is never coming.
             long started = System.nanoTime();
             assertNull(new VMMetadataClient(this.endpointOf(server))
-                    .waitForFirstResponse("teamcity_image_id", 5000, 2000));
+                    .waitForValue("teamcity_image_id", 300, 50));
             long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
 
-            assertEquals("expected a single request once the service answered", 1, calls.get());
-            // The retry interval is large next to this ceiling on purpose: a regression to
-            // "keep polling until the key resolves" spends the 5000ms budget here, and even one
-            // extra retry overshoots.
-            assertTrue(String.format("waited %dms, expected to return on the first response", elapsedMillis),
-                    elapsedMillis < 2000);
+            assertTrue(String.format("waited %dms, expected to stop near the 300ms budget", elapsedMillis),
+                    elapsedMillis < 3000);
+            assertTrue(String.format("made %d calls, expected it to keep polling within the budget", calls.get()),
+                    calls.get() >= 2);
         } finally {
             server.stop(0);
         }
@@ -169,7 +185,7 @@ public class VMMetadataClientTest {
             // is that it gets there inside the budget rather than sitting on a dead service.
             long started = System.nanoTime();
             assertNull(new VMMetadataClient(this.endpointOf(server))
-                    .waitForFirstResponse("teamcity_image_id", 300, 200));
+                    .waitForValue("teamcity_image_id", 300, 200));
             long elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
 
             assertTrue(String.format("waited %dms, expected to stop near the 300ms budget", elapsedMillis),

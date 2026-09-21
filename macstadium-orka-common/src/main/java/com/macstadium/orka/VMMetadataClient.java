@@ -49,20 +49,21 @@ public class VMMetadataClient {
     }
 
     /**
-     * Polls until the service answers at all, then returns that answer's value for the key.
-     * Returns null when the service answered without the key, and null when it never answered
-     * within the budget. The budget covers only the wait for a first response: an absent key is
-     * returned as an answer rather than waited on, which assumes the service exposes its keys as
-     * soon as it answers at all. See the Daemon section of the README for where that assumption
-     * comes from.
+     * Polls until the key resolves to a value or the budget runs out. orka-vm-tools brings the
+     * listener up before the engine has handed it the VM's metadata, and answers 400 for every
+     * key in between, so a null from a single lookup means "not yet" as often as "never".
+     * Returns null when the key never resolved within the budget.
      */
-    public String waitForFirstResponse(String key, long totalWaitMillis, long millisBetweenRetries)
+    public String waitForValue(String key, long totalWaitMillis, long millisBetweenRetries)
             throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(totalWaitMillis);
         while (true) {
             try {
-                return this.getValue(key);
-            } catch (IOException ignored) {
+                String value = this.getValue(key);
+                if (value != null) {
+                    return value;
+                }
+            } catch (IOException notYetListening) {
                 // orka-vm-tools may not have brought up the link-local listener yet.
             }
 
