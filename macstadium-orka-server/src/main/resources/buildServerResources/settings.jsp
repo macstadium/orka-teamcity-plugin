@@ -147,11 +147,11 @@
         </tr>
 
         <tr class="advancedSetting">
-            <th><label for="${constants.agentDirectory}">Node mappings:</label></th>
+            <th><label for="${constants.nodeMappings}">Node mappings:</label></th>
             <td>
                 <div data-bind="visible: showMappings" style="display: none">
                     <div>Edit Node Mappings:</div>
-                    <textarea name="prop:${constants.nodeMappings}" class="mappings"
+                    <textarea name="prop:${constants.nodeMappings}" id="${constants.nodeMappings}" class="mappings"
                               rows="5" cols="30"
                               data-bind="initValue: initialNodeMappings, textInput: nodeMappings">
                         <c:out value="${propertiesBean.properties[constants.nodeMappings]}"/>
