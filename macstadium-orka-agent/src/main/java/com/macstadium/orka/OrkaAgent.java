@@ -91,6 +91,11 @@ public class OrkaAgent {
                     startingInstanceId);
         }
 
+        String profileId = this.metadataClient.getValue(CommonConstants.PROFILE_ID_METADATA_KEY, METADATA_ATTEMPTS);
+        if (!isEmpty(profileId)) {
+            configuration.addConfigurationParameter(CommonConstants.PROFILE_ID_PARAM_NAME, profileId);
+        }
+
         LOG.info(String.format("OrkaAgent configured from the metadata service with instance id: %s",
                 instanceId));
     }
@@ -121,8 +126,11 @@ public class OrkaAgent {
         List<String> contents = FileUtil.readFile(metadataFile);
         configuration.addConfigurationParameter(CommonConstants.INSTANCE_ID_PARAM_NAME, contents.get(0));
         configuration.addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, contents.get(1));
-        if (contents.size() > 2) {
+        if (contents.size() > 2 && !isEmpty(contents.get(2))) {
             configuration.addConfigurationParameter(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM, contents.get(2));
+        }
+        if (contents.size() > 3 && !isEmpty(contents.get(3))) {
+            configuration.addConfigurationParameter(CommonConstants.PROFILE_ID_PARAM_NAME, contents.get(3));
         }
 
         LOG.info(String.format("OrkaAgent configured from the local metadata file %s with instance id: %s",
