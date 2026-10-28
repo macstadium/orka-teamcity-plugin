@@ -126,7 +126,7 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
                 vmUser, agentPoolId, instanceLimit));
 
         return new OrkaCloudImage(vm, namespace, StringUtil.notNullize(vmUser), StringUtil.notNullize(vmPassword),
-                agentPoolId, limit);
+                agentPoolId, limit, params.getProfileId());
     }
 
     public boolean isInitialized() {
@@ -246,8 +246,8 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
             if (this.startsAgentOverSsh()) {
                 LOG.debug("setUpVM waiting for SSH to be enabled");
                 this.waitForVM(host, sshPort);
-                this.remoteAgent.startAgent(instanceId, image.getId(), host, sshPort, image.getUser(),
-                        image.getPassword(), this.agentDirectory, data);
+                this.remoteAgent.startAgent(instanceId, image.getId(), image.getProfileId(), host, sshPort,
+                        image.getUser(), image.getPassword(), this.agentDirectory, data);
             }
             instance.setStatus(InstanceStatus.RUNNING);
         } catch (IOException | InterruptedException e) {
@@ -279,6 +279,9 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
     private Map<String, String> buildCustomMetadata(OrkaCloudImage image, @Nullable final CloudInstanceUserData data) {
         Map<String, String> customMetadata = new HashMap<String, String>();
         customMetadata.put(CommonConstants.IMAGE_ID_METADATA_KEY, image.getId());
+        if (StringUtil.isNotEmpty(image.getProfileId())) {
+            customMetadata.put(CommonConstants.PROFILE_ID_METADATA_KEY, image.getProfileId());
+        }
 
         String startingInstanceId = data == null ? null
                 : data.getCustomAgentConfigurationParameters().get(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM);
@@ -366,9 +369,12 @@ public class OrkaCloudClient extends BuildServerAdapter implements CloudClientEx
 
     @Nullable
     private OrkaCloudImage findImage(@NotNull final AgentDescription agentDescription) {
-        final String imageId = agentDescription.getConfigurationParameters().get(CommonConstants.IMAGE_ID_PARAM_NAME);
-        LOG.debug(String.format("findImage with imageId: %s", imageId));
-        return imageId == null ? null : this.findImageById(imageId);
+        final Map<String, String> configParams = agentDescription.getConfigurationParameters();
+        final String imageId = configParams.get(CommonConstants.IMAGE_ID_PARAM_NAME);
+        final String profileId = configParams.get(CommonConstants.PROFILE_ID_PARAM_NAME);
+        LOG.debug(String.format("findImage with imageId: %s, profileId: %s", imageId, profileId));
+        final OrkaCloudImage image = imageId == null ? null : this.findImageById(imageId);
+        return image != null && image.matchesAgentProfile(profileId) ? image : null;
     }
 
     @Nullable

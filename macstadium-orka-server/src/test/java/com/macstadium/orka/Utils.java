@@ -24,6 +24,11 @@ public class Utils {
 
     public static CloudClientParameters getCloudClientParametersMock(String imageId, String nodeMappings,
             String setupMode) {
+        return getCloudClientParametersMock(imageId, nodeMappings, setupMode, null);
+    }
+
+    public static CloudClientParameters getCloudClientParametersMock(String imageId, String nodeMappings,
+            String setupMode, String profileId) {
         final Map<String, String> params = new HashMap<String, String>();
         params.put(OrkaConstants.SETUP_MODE, setupMode);
         params.put(OrkaConstants.AGENT_DIRECTORY, "dir");
@@ -45,6 +50,7 @@ public class Utils {
                 return params.get(args[0]);
             }
         });
+        when(mock.getProfileId()).thenReturn(profileId);
 
         return mock;
     }
