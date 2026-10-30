@@ -133,6 +133,7 @@ public class OrkaCloudInstance implements CloudInstance {
 
         LOG.debug(String.format("containsAgent with instanceId: %s and imageId: %s", instanceId, imageId));
 
-        return this.id.equals(instanceId) && getImageId().equals(imageId);
+        return this.id.equals(instanceId) && getImageId().equals(imageId)
+                && this.image.matchesAgentProfile(configParams.get(CommonConstants.PROFILE_ID_PARAM_NAME));
     }
 }

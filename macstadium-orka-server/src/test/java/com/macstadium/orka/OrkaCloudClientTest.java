@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -120,6 +121,68 @@ public class OrkaCloudClientTest {
         assertNotNull(instance);
         assertEquals(instanceId, instance.getInstanceId());
         assertEquals(imageId, instance.getImageId());
+    }
+
+    public void when_two_profiles_share_a_vm_config_should_match_agent_only_to_its_own_profile() throws IOException {
+        String imageId = "imageId";
+        String instanceId = "instanceId";
+        OrkaClient orkaClientA = this.getOrkaClientWithExistingVM(instanceId);
+        OrkaClient orkaClientB = this.getOrkaClientWithExistingVM(instanceId);
+        OrkaCloudClient clientA = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, OrkaConstants.SETUP_MODE_SSH, "profile-a"),
+                orkaClientA, mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+        OrkaCloudClient clientB = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, OrkaConstants.SETUP_MODE_SSH, "profile-b"),
+                orkaClientB, mock(ScheduledExecutorService.class), mock(RemoteAgent.class), mock(SSHUtil.class));
+        clientA.findImageById(imageId).startNewInstance(instanceId);
+
+        AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, imageId, "profile-a");
+
+        assertNotNull(clientA.findInstanceByAgent(agentDescription));
+        assertNull(clientB.findInstanceByAgent(agentDescription));
+        verify(orkaClientB, never()).getVM(any(), any());
+        assertEquals(0, clientB.findImageById(imageId).getInstances().size());
+    }
+
+    public void when_agent_reports_no_profile_id_should_keep_matching_by_image_id() throws IOException {
+        String imageId = "imageId";
+        String instanceId = "instanceId";
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock(imageId, null, OrkaConstants.SETUP_MODE_SSH, "profile-b"),
+                this.getOrkaClientWithExistingVM(instanceId), mock(ScheduledExecutorService.class),
+                mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        AgentDescription agentDescription = this.getAgentDescriptionMock(instanceId, imageId);
+
+        OrkaCloudInstance instance = client.findInstanceByAgent(agentDescription);
+        assertNotNull(instance);
+        assertEquals(instanceId, instance.getInstanceId());
+    }
+
+    public void when_start_new_instance_over_ssh_should_pass_profile_id_to_agent() throws IOException {
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        RemoteAgent remoteAgent = mock(RemoteAgent.class);
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock("imageId", null, OrkaConstants.SETUP_MODE_SSH, "profile-a"),
+                orkaClient, this.getScheduledExecutorService(), remoteAgent, mock(SSHUtil.class));
+
+        client.startNewInstance(this.getImage(client), null);
+
+        verify(remoteAgent).startAgent(any(), eq("imageId"), eq("profile-a"), any(), anyInt(), any(), any(), any(),
+                any());
+    }
+
+    public void when_start_new_instance_with_daemon_should_send_profile_id_metadata() throws IOException {
+        OrkaClient orkaClient = this.getOrkaClientMock("host", 22, "instanceId");
+        OrkaCloudClient client = new OrkaCloudClient(
+                Utils.getCloudClientParametersMock("imageId", null, OrkaConstants.SETUP_MODE_DAEMON, "profile-a"),
+                orkaClient, this.getScheduledExecutorService(), mock(RemoteAgent.class), mock(SSHUtil.class));
+
+        client.startNewInstance(this.getImage(client), null);
+
+        ArgumentCaptor<Map<String, String>> metadata = ArgumentCaptor.forClass(Map.class);
+        verify(orkaClient).deployVM(any(), any(), metadata.capture());
+        assertEquals("profile-a", metadata.getValue().get(CommonConstants.PROFILE_ID_METADATA_KEY));
     }
 
     public void when_start_new_instance_should_return_new_instance() throws IOException {
@@ -282,7 +345,7 @@ public class OrkaCloudClientTest {
 
         client.startNewInstance(this.getImage(client), data);
 
-        verify(remoteAgent, never()).startAgent(any(), any(), any(), anyInt(), any(), any(), any(), any());
+        verify(remoteAgent, never()).startAgent(any(), any(), any(), any(), anyInt(), any(), any(), any(), any());
         ArgumentCaptor<Map<String, String>> metadata = ArgumentCaptor.forClass(Map.class);
         verify(orkaClient).deployVM(any(), any(), metadata.capture());
         assertEquals(imageId, metadata.getValue().get(CommonConstants.IMAGE_ID_METADATA_KEY));
@@ -321,7 +384,7 @@ public class OrkaCloudClientTest {
 
         verify(orkaClient).deployVM(any(), any());
         verify(orkaClient, never()).deployVM(any(), any(), any());
-        verify(remoteAgent).startAgent(any(), any(), any(), anyInt(), any(), any(), any(), any());
+        verify(remoteAgent).startAgent(any(), any(), any(), any(), anyInt(), any(), any(), any(), any());
     }
 
     public void when_terminate_instance_with_daemon_should_not_stop_agent_over_ssh() throws IOException {
@@ -383,14 +446,27 @@ public class OrkaCloudClientTest {
     }
 
     private AgentDescription getAgentDescriptionMock(String instanceId, String imageId) {
+        return this.getAgentDescriptionMock(instanceId, imageId, null);
+    }
+
+    private AgentDescription getAgentDescriptionMock(String instanceId, String imageId, String profileId) {
         Map<String, String> params = new HashMap<String, String>();
         params.put(OrkaConstants.INSTANCE_ID_PARAM_NAME, instanceId);
         params.put(OrkaConstants.IMAGE_ID_PARAM_NAME, imageId);
+        params.put(CommonConstants.PROFILE_ID_PARAM_NAME, profileId);
 
         AgentDescription mock = mock(AgentDescription.class);
         when(mock.getConfigurationParameters()).thenReturn(params);
 
         return mock;
+    }
+
+    private OrkaClient getOrkaClientWithExistingVM(String instanceId) throws IOException {
+        OrkaClient orkaClient = mock(OrkaClient.class);
+        VMResponse vmResponse = new VMResponse(instanceId, 22, "host", null);
+        vmResponse.setHttpResponse(new HttpResponse(instanceId, 200, true));
+        when(orkaClient.getVM(any(), any())).thenReturn(vmResponse);
+        return orkaClient;
     }
 
     private OrkaClient getOrkaClientMock(String host, int sshPort, String instanceId) throws IOException {

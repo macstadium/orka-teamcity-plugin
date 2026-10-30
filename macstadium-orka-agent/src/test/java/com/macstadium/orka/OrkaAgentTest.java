@@ -45,6 +45,8 @@ public class OrkaAgentTest {
         verify(this.configuration).addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, "image-1");
         verify(this.configuration).addConfigurationParameter(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM,
                 "starting-1");
+        verify(this.configuration, never()).addConfigurationParameter(eq(CommonConstants.PROFILE_ID_PARAM_NAME),
+                anyString());
         assertTrue(new File(this.currentDir, CommonConstants.METADATA_FILE_PREFIX).exists());
         verify(this.metadataClient, never()).waitForValue(anyString(), anyLong(), anyLong());
     }
@@ -58,7 +60,54 @@ public class OrkaAgentTest {
         verify(this.configuration).addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, "image-1");
         verify(this.configuration, never()).addConfigurationParameter(
                 eq(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM), anyString());
+        verify(this.configuration, never()).addConfigurationParameter(eq(CommonConstants.PROFILE_ID_PARAM_NAME),
+                anyString());
         verify(this.metadataClient, never()).waitForValue(anyString(), anyLong(), anyLong());
+    }
+
+    public void when_metadata_file_has_profile_id_should_configure_it() throws Exception {
+        this.writeMetadataFile(this.tempDir, "vm-1", "image-1", "starting-1", "profile-a");
+
+        new OrkaAgent(this.configuration, this.metadataClient, this.tempDir, this.currentDir);
+
+        verify(this.configuration).addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, "image-1");
+        verify(this.configuration).addConfigurationParameter(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM,
+                "starting-1");
+        verify(this.configuration).addConfigurationParameter(CommonConstants.PROFILE_ID_PARAM_NAME, "profile-a");
+    }
+
+    public void when_metadata_file_has_empty_starting_instance_id_should_skip_it_and_read_profile_id()
+            throws Exception {
+        this.writeMetadataFile(this.tempDir, "vm-1", "image-1", "", "profile-a");
+
+        new OrkaAgent(this.configuration, this.metadataClient, this.tempDir, this.currentDir);
+
+        verify(this.configuration).addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, "image-1");
+        verify(this.configuration, never()).addConfigurationParameter(
+                eq(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM), anyString());
+        verify(this.configuration).addConfigurationParameter(CommonConstants.PROFILE_ID_PARAM_NAME, "profile-a");
+    }
+
+    public void when_metadata_service_has_profile_id_should_configure_it() throws Exception {
+        this.stubMetadataService("vm-1", "image-1", "starting-1");
+        when(this.metadataClient.getValue(eq(CommonConstants.PROFILE_ID_METADATA_KEY), anyInt()))
+                .thenReturn("profile-a");
+
+        new OrkaAgent(this.configuration, this.metadataClient, this.tempDir, this.currentDir);
+
+        verify(this.configuration).addConfigurationParameter(CommonConstants.PROFILE_ID_PARAM_NAME, "profile-a");
+    }
+
+    public void when_metadata_service_has_no_profile_id_should_skip_it_without_waiting() throws Exception {
+        this.stubMetadataService("vm-1", "image-1", "starting-1");
+
+        new OrkaAgent(this.configuration, this.metadataClient, this.tempDir, this.currentDir);
+
+        verify(this.configuration).addConfigurationParameter(CommonConstants.IMAGE_ID_PARAM_NAME, "image-1");
+        verify(this.configuration, never()).addConfigurationParameter(eq(CommonConstants.PROFILE_ID_PARAM_NAME),
+                anyString());
+        verify(this.metadataClient, never()).waitForValue(eq(CommonConstants.PROFILE_ID_METADATA_KEY), anyLong(),
+                anyLong());
     }
 
     public void when_no_metadata_file_should_configure_from_the_metadata_service() throws Exception {

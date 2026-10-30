@@ -1,6 +1,7 @@
 package com.macstadium.orka;
 
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.text.StringUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import net.schmizz.sshj.connection.channel.direct.Session.Command;
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class RemoteAgent {
     private static final Logger LOG = Logger.getInstance(Loggers.CLOUD_CATEGORY_ROOT + OrkaConstants.TYPE);
@@ -25,18 +27,15 @@ public class RemoteAgent {
     private static final String START_COMMAND_FORMAT = "%s/bin/agent.sh start";
     private static final String STOP_COMMAND_FORMAT = "%s/bin/agent.sh stop";
 
-    public void startAgent(String instanceId, String imageId, String host, int sshPort, String sshUser,
-            String sshPassword, String agentDirectory, @NotNull final CloudInstanceUserData data) throws IOException {
+    public void startAgent(String instanceId, String imageId, String profileId, String host, int sshPort,
+            String sshUser, String sshPassword, String agentDirectory, @NotNull final CloudInstanceUserData data)
+            throws IOException {
 
         File tempFile = File.createTempFile(CommonConstants.METADATA_FILE_PREFIX, ".tmp");
-        String text = instanceId + System.lineSeparator() + imageId;
-        if (data.getCustomAgentConfigurationParameters()
-                .containsKey(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM)) {
-            text = text + System.lineSeparator() + data.getCustomAgentConfigurationParameters()
-                    .get(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM);
-        }
-
-        FileUtil.writeFileAndReportErrors(tempFile, text);
+        String startingInstanceId = data.getCustomAgentConfigurationParameters()
+                .get(CommonConstants.STARTING_INSTANCE_ID_CONFIG_PARAM);
+        FileUtil.writeFileAndReportErrors(tempFile,
+                getMetadataFileText(instanceId, imageId, startingInstanceId, profileId));
 
         LOG.debug("startAgentOnVM starting...");
 
@@ -53,6 +52,14 @@ public class RemoteAgent {
         }
 
         LOG.debug("startAgentOnVM completed.");
+    }
+
+    // The starting instance id line is optional, so it is always written, empty when absent, to keep
+    // the profile id on a fixed line. Older agents read only the first three lines.
+    static String getMetadataFileText(String instanceId, String imageId, @Nullable String startingInstanceId,
+            @Nullable String profileId) {
+        return String.join(System.lineSeparator(), instanceId, imageId, StringUtil.notNullize(startingInstanceId),
+                StringUtil.notNullize(profileId));
     }
 
     public void stopAgent(String host, int sshPort, String sshUser, String sshPassword, String agentDirectory) {

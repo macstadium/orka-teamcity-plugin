@@ -1,6 +1,7 @@
 package com.macstadium.orka;
 
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.text.StringUtil;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -28,18 +29,21 @@ public class OrkaCloudImage implements CloudImage {
     private final String namespace;
     private final int agentPoolId;
     private final int instanceLimit;
+    @Nullable
+    private final String profileId;
     @NotNull
     private final Map<String, OrkaCloudInstance> instances = new ConcurrentHashMap<String, OrkaCloudInstance>();
 
     public OrkaCloudImage(@NotNull final String imageId, @NotNull final String namespace, @NotNull final String user,
             @NotNull final String password,
-            @NotNull final String agentPoolId, int instanceLimit) {
+            @NotNull final String agentPoolId, int instanceLimit, @Nullable final String profileId) {
         this.id = imageId;
         this.namespace = namespace;
         this.user = user;
         this.password = password;
         this.agentPoolId = Integer.parseInt(agentPoolId);
         this.instanceLimit = instanceLimit;
+        this.profileId = profileId;
     }
 
     @NotNull
@@ -65,6 +69,16 @@ public class OrkaCloudImage implements CloudImage {
     @NotNull
     public String getNamespace() {
         return this.namespace;
+    }
+
+    @Nullable
+    public String getProfileId() {
+        return this.profileId;
+    }
+
+    // Agents started by an older plugin version report no profile id and must keep matching.
+    public boolean matchesAgentProfile(@Nullable final String agentProfileId) {
+        return StringUtil.isEmpty(agentProfileId) || agentProfileId.equals(this.profileId);
     }
 
     @NotNull
